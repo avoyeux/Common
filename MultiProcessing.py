@@ -3,6 +3,7 @@
 
 import numpy as np
 from typeguard import typechecked
+from multiprocessing.shared_memory import SharedMemory
 
 
 class MultiProcessing:
@@ -31,3 +32,27 @@ class MultiProcessing:
             return [((step * i) + min(i, leftover), step * (i + 1) + min(i + 1, leftover) - 1) for i in range(nb_processes)]
         else:
             return[(i, i) for i in range(data_length)]
+    
+    @typechecked
+    @staticmethod
+    def Shared_memory(self, data: np.ndarray) -> tuple[SharedMemory, dict[str, any]]:
+        """Creating a shared memory space given an input np.ndarray.
+
+        Args:
+            data (np.ndarray): data array that you want to create a shared memory object for.
+
+        Returns:
+            tuple[SharedMemory, dict[str, any]]: information needed to access the shared memory object.
+        """
+
+        # Initialisations
+        shm = SharedMemory(create=True, size=data.nbytes)
+        info = {
+            'shm.name': shm.name,
+            'data.shape': data.shape,
+            'data.dtype': data.dtype,
+        }
+        shared_array = np.ndarray(info['data.shape'], dtype=info['data.dtype'], buffer=shm.buf)
+        np.copyto(shared_array, data)
+        shm.close()
+        return shm, info

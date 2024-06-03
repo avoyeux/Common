@@ -31,8 +31,7 @@ class SpiceUtils:
     @staticmethod
     def read_spice_uio_catalog():
         """
-        Read UiO text table SPICE FITS files catalog
-        http://astro-sdc-db.uio.no/vol/spice/fits/spice_catalog.txt
+        Read csv table SPICE FITS files catalog
 
         Return
         ------

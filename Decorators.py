@@ -32,7 +32,7 @@ def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[Typ
     if isinstance(functiontype, str) and (functiontype not in ['regular', 'instance']):
         raise ValueError(f"The string value '{functiontype}' for functiontype is not supported. Choose 'regular', 'instance', or 'all'")
 
-    def Class_rebuilder(cls) -> Type:
+    def class_rebuilder(cls) -> Type:
         """Rebuilds the class adding the new decorators.
 
         Returns:
@@ -53,7 +53,7 @@ def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[Typ
                     method = decorator(obj)
                     setattr(NewClass, name, method)
         return NewClass
-    return Class_rebuilder
+    return class_rebuilder
                 
 
 class Decorators:

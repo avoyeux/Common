@@ -12,7 +12,7 @@ class MultiProcessing:
 
     @typechecked
     @staticmethod
-    def Pool_indexes(data_length: int, nb_processes: int = 4) -> list[tuple[int, int]]:
+    def pool_indexes(data_length: int, nb_processes: int = 4) -> list[tuple[int, int]]:
         """Gives out a list of tuples with the start and last data index for each process.
 
         Args:
@@ -35,7 +35,7 @@ class MultiProcessing:
     
     @typechecked
     @staticmethod
-    def Shared_memory(self, data: np.ndarray) -> tuple[SharedMemory, dict[str, any]]:
+    def shared_memory(data: np.ndarray) -> tuple[SharedMemory, dict[str, any]]:
         """Creating a shared memory space given an input np.ndarray.
 
         Args:

@@ -11,7 +11,7 @@ class PlotFunctions:
 
     @typechecked
     @staticmethod
-    def Contours(mask: np.ndarray) -> list[tuple[list[float], list[float]]]:
+    def contours(mask: np.ndarray) -> list[tuple[list[float], list[float]]]:
         """To plot the contours given a mask.
 
         Args:

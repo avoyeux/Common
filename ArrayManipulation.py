@@ -12,7 +12,7 @@ class ArrayManipulation:
 
     @typechecked
     @staticmethod
-    def Downsampling(array2D: np.ndarray, downsampling_size: tuple[int, int], return_npndarray: bool = True) -> np.ndarray | Image.Image:
+    def downsampling(array2D: np.ndarray, downsampling_size: tuple[int, int], return_npndarray: bool = True) -> np.ndarray | Image.Image:
         """To Downsample and image using PIL with the high quality Lanczos method.
         """
 

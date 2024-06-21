@@ -54,11 +54,14 @@ class StereoUtils:
             pd.DataFrame: the pandas.DataFrame object corresponding to the STEREO catalogue. The headers are:
             'FileName', 'DateObs', 'Tel', 'Exptime', 'Xsize', 'Ysize', 'Filter', 'Polar', 'Prog', 'OSnum', 'Dest', 'FPS', 'LED', 'CMPRS', 'NMISS'.
         """
-        df = pd.read_csv(StereoUtils.catalogue_path(), delimiter='|', comment='=', engine='python')
-
-        # Remove trailing whitespaces in the column names and values
-        df.columns = [col.strip() for col in df.columns]
-        df = df.apply(lambda x: x.str.strip() if x.dtype == 'string' else x)
+        
+        catalogue_filepath = StereoUtils.catalogue_path()
+        with open(catalogue_filepath, 'r') as catalogue:
+            header_line = catalogue.readline().strip()
+        headers = [header.strip() for header in header_line.split()]
+    
+        df = pd.read_csv(catalogue_filepath, delimiter='|', skiprows=2, names=headers)
+        df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x) # remove trailing whitespaces in the values 
 
         if filter_compressed_data: df = df[df['Dest'] != 'SW']
         return df

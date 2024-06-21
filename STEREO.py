@@ -4,12 +4,27 @@ Right now it only reads the catalogue and reformats it to a pandas.DataFrame() o
 
 # Imports
 import os
+import re
 import pandas as pd
 
 from typeguard import typechecked
 
 
 class StereoUtils:
+    """For opening, reading and filtering the STEREO catalogue.
+
+    Raises:
+        ValueError: _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    # STEREO filename pattern
+    stereo_filename_pattern = re.compile(r'''(?P<date>\d{8})_
+                                         (?P<ID>\d{6})_
+                                         (?P<type>n\d+eu[a-zA-Z]).fts
+                                         ''', re.VERBOSE)
     
     @staticmethod
     def catalogue_path() -> str:
@@ -48,3 +63,13 @@ class StereoUtils:
         if filter_compressed_data: df = df[df['Dest'] != 'SW']
         return df
 
+    @staticmethod
+    def full_path(filename: str) -> str:
+        directory_path = '/archive/science_data/stereo/lz/L0/b/img/euvi'
+        pattern_match = StereoUtils.stereo_filename_pattern.match(filename)
+
+        if pattern_match: 
+            date = pattern_match.group('date')
+        else:
+            raise ValueError(f"STEREO filename did not match with: {filename}")
+        return os.path.join(directory_path, date, filename)

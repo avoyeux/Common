@@ -86,7 +86,7 @@ class StereoUtils:
         df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x) # remove trailing whitespaces in the values 
 
         if filter_compressed_data: df = df[df['dest'] != 'SW']
-        return df
+        return df.reset_index(drop=True)
 
     @staticmethod
     def fullpath(filenames: str | list[str] | pd.Series) -> str | list[str]:
@@ -120,49 +120,28 @@ class StereoUtils:
         
         if len_filenames == 1: return list_fullpath[0]
         return list_fullpath
-    
+
     @typechecked
     @staticmethod
-    def l0_l1_conversion(filenames: str | list[str] | pd.Series, ndarray: bool = True) -> np.ndarray | list[np.ndarray]:
-        """To convert l0 filenames to images with the mean bias subtracted and multiplied by the flat.
-
-        Args:
-            filenames (str | list[str]): the l0 stereo filename or list of filenames. The filenames can either be the fullpath or
-            just the filename with no path.
-            ndarray (bool, optional): chooses if the output is a list of ndarray images or a single ndarray containing all the images.
-            Defaults to True.
-
-        Returns:
-            np.ndarray | list[np.ndarray]: the ndarray images contained in a list or in a single ndarray.
-        """
+    def image_preprocessing(filenames: str | list[str] | pd.Series, clip_percentages: tuple[int | float, int | float] = (1, 99.99), clip_nan: bool = True,
+                            log: bool = True, log_lowercut: int = 1) -> np.ndarray:
         
-        # Making sure filenames is a list
-        if isinstance(filenames, str): filenames = [filenames]
+        if isinstance(filenames, str): 
+            filenames = [filenames]
 
-        # Getting the flat acquisition
-        flat_image = fits.getdata(StereoUtils.flat_path(), 0)
-
-        # Opening the l0 files
         len_filenames = len(filenames)
-        l1_images = [None] * len_filenames
+        images = [None] * len_filenames
+        means = [None] * len_filenames
         for i, filename in enumerate(filenames):
-            if not os.path.isabs(filename): filename = StereoUtils.fullpath(filename)  # checking if the filenames args is absolute path or not.
+            if not os.path.isabs(filename): filename = StereoUtils.fullpath(filename)
 
             hdul = fits.open(filename)
-            image = (hdul[0].data - hdul[0].header['BIASMEAN']) #* flat_image  # TODO: this doesn't work as the flat image doesn't have the same shape
-            l1_images[i] = image.astype('uint16')
+            images[i] = hdul[0].data.astype('uint16')
+            means[i] = hdul[0].header['BIASMEAN']
             hdul.close()
-
-        if len_filenames == 1: return l1_images[0]
-        if ndarray: return np.stack(l1_images, axis = 0)
-        return l1_images
-
-    @typechecked
-    @staticmethod
-    def image_preprocessing(images: np.ndarray | list[np.ndarray], clip_percentages: tuple[int | float, int | float] = (1, 99.99), clip_nan: bool = True,
-                            log: bool = True) -> np.ndarray:
-        
-        if isinstance(images, str): images = np.stack(images, axis=0)
+        images = np.stack(images, axis=0)
+        means = np.stack(means, axis=0)
+        means = means.reshape(len_filenames, 1, 1)
 
         # Getting the extrema
         lower_cut = np.nanpercentile(images, clip_percentages[0])
@@ -174,6 +153,11 @@ class StereoUtils:
 
         # Swapping nan values
         if clip_nan: images = np.where(np.isnan(images), lower_cut, images)
-        if log: images = np.log(images)
+        images = images - means  # subtracting the bias
+        if log: 
+            images[images < log_lowercut] = log_lowercut
+            images = np.log(images)
+
+        if images.shape[0] == 1: return images[0]
         return images
 

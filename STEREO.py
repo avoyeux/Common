@@ -8,7 +8,6 @@ import re
 
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from astropy.io import fits
 from typeguard import typechecked

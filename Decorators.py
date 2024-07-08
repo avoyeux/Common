@@ -24,7 +24,7 @@ def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[F],
         ValueError: if the 'functiontype' is not supported yet, it raises a ValueError.
 
     Returns:
-        Callable[[Type], Type]: returns a function that has the new class with the new decorator applied.
+        Callable[[F], F]: returns a function that has the new class with the new decorator applied.
     """
 
     if functiontype == 'all':

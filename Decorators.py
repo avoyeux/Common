@@ -1,6 +1,9 @@
-"""Has decorators that I regularly use.
+#!/usr/bin/env python3.11
+"""
+Has decorators that I regularly use.
 """
 
+# IMPORTS
 from functools import wraps
 from time import time, ctime
 from typeguard import typechecked
@@ -10,9 +13,12 @@ from typing import Type, Callable, TypeVar
 F = TypeVar('F', bound=Callable[..., any])
 D = Callable[[F], any]
 
+
+
 @typechecked
 def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[F], F]:
-    """Class decorator that applies a given decorator to class functions with the specified function type
+    """
+    Class decorator that applies a given decorator to class functions with the specified function type
     (i.e. classmethod, staticmethod, property, 'regular' or 'instance' -- for an instance method, 
     'all' for all the class functions).
 
@@ -57,13 +63,14 @@ def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[F],
                 
 
 class Decorators:
-    """To store useful function decorators that I created.
+    """
+    To store useful function decorators that I created.
     """
     
-    # @typechecked
     @staticmethod
     def running_time(verbose_name: str = 'verbose', flush_name: str = 'flush') -> Callable[[F], F]:
-        """The 'shell' of the Decorators.Utils._actual_running_time_decorator decorator function. This shell was created to decide when a decorator factory needs to
+        """
+        The 'shell' of the Decorators.Utils._actual_running_time_decorator decorator function. This shell was created to decide when a decorator factory needs to
         be used (i.e. when arguments are given or () is used). In the case that no parentheses are used, then the decorator needs to be a simple one and hence using
         a decorator factory would raise major errors. For the documentation of what this decorator/decorator factory does, look at the docstring for the aforementioned
         function.
@@ -95,12 +102,14 @@ class Decorators:
 
 
 class DecoratorsUtils:
-    """Stores functions that are used to help the added functionalities in this Decorators.py code file.
+    """
+    Stores functions that are used to help the added functionalities in this Decorators.py code file.
     """
 
     @staticmethod
     def _actual_running_time_decorator(func: F, verbose_name: str, flush_name: str) -> F:
-        """Decorator that prints the starting time of the decorated function in bold blue, and prints the finish running time in bold green.
+        """
+        Decorator that prints the starting time of the decorated function in bold blue, and prints the finish running time in bold green.
         The finish time is in readable format, i.e. if any, the time is separated in days, hours, minutes, seconds and centiseconds if the total time is less than a
         minute.
         Furthermore, the printing is decided on the function attributes if the function has the necessary attributes. If not, then the running time is still printed.
@@ -121,7 +130,8 @@ class DecoratorsUtils:
 
         @wraps(func)
         def wrapper(*args: any, **kwargs: any) -> any:
-            """The usual wrapper for decorators.
+            """
+            The usual wrapper for decorators.
 
             Returns:
                 any: the results of the function after running.
@@ -153,14 +163,15 @@ class DecoratorsUtils:
                 END_time = time()
                 DIF_time = END_time - START_time
 
-                time_string = DecoratorsUtils.format_time_seconds(DIF_time)
+                time_string = DecoratorsUtils._format_time_seconds(DIF_time)
                 if verbose > 0: print(f"\033[92m{func.__name__} ended on {ctime(END_time)} ({time_string}).\033[0m", flush=flush)                 
             return result
         return wrapper
 
     @staticmethod
-    def format_time_seconds(seconds: int | float) -> str:
-        """Creates as string based on a time input in seconds. The string shows the corresponding time in days, hours, minutes and seconds.
+    def _format_time_seconds(seconds: int | float) -> str:
+        """
+        Creates as string based on a time input in seconds. The string shows the corresponding time in days, hours, minutes and seconds.
 
         Args:
             seconds (int | float): the time in seconds that need to be converted in a string human format.

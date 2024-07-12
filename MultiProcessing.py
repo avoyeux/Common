@@ -1,4 +1,6 @@
-"""Has functions that help me when multiprocessing.
+#!/usr/bin/env python3.11
+"""
+Has functions that help me when multiprocessing.
 """
 
 import numpy as np
@@ -6,14 +8,16 @@ from typeguard import typechecked
 from multiprocessing.shared_memory import SharedMemory
 
 
+
 class MultiProcessing:
-    """Some functions that are useful when multiprocessing.
+    """
+    Some functions that are useful when multiprocessing.
     """
 
-    @typechecked
     @staticmethod
     def pool_indexes(data_length: int, nb_processes: int = 4) -> list[tuple[int, int]]:
-        """Gives out a list of tuples with the start and last data index for each process.
+        """
+        Gives out a list of tuples with the start and last data index for each process.
 
         Args:
             data_length (int): the length of the data that you want to multiprocess.
@@ -33,10 +37,10 @@ class MultiProcessing:
         else:
             return[(i, i) for i in range(data_length)]
     
-    @typechecked
     @staticmethod
     def shared_memory(data: np.ndarray) -> tuple[SharedMemory, dict[str, any]]:
-        """Creating a shared memory space given an input np.ndarray.
+        """
+        Creating a shared memory space given an input np.ndarray.
 
         Args:
             data (np.ndarray): data array that you want to create a shared memory object for.

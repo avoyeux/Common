@@ -1,5 +1,6 @@
-"""Stores some functions that are specific for STEREO data accessing.
-Right now it only reads the catalogue and reformats it to a pandas.DataFrame() object.
+#!/usr/bin/env python3.11
+"""
+Stores some functions that are specific for STEREO data accessing.
 """
 
 # Imports
@@ -10,8 +11,9 @@ import numpy as np
 import pandas as pd
 
 from astropy.io import fits
-from typeguard import typechecked
 
+# Personal libraries
+from .ServerConnection import ServerUtils
 
 
 class StereoUtils:
@@ -24,72 +26,49 @@ class StereoUtils:
         _type_: _description_
     """
 
-    # STEREO filename pattern
+    # STEREO filename pattern and main paths.
     stereo_filename_pattern = re.compile(r'''(?P<date>\d{8})_
                                          (?P<ID>\d{6})_
                                          (?P<type>n\d+eu[a-zA-Z]).fts
                                          ''', re.VERBOSE)
+    file_directory_path = '/archive/science_data/stereo/lz/L0/b/img/euvi'  # main directory where the STEREO FITS files are
+    flat_path = '/usr/local/ssw/stereo/secchi/calibration/20060823_wav171_fCeuB.fts'  # path to the flat field image albeit useless as just ones.
+    catalogue_path = '/archive/science_data/stereo/lz/L0/b/summary/sccB201207.img.eu'  # path to the STEREO catalogue
     
     @staticmethod
-    def catalogue_path() -> str:
-        """Gives the full path of the STEREO catalogue. Only works when on the .ias.u-psud.fr server. Else, raises a ValueError.
-
-        Raises:
-            ValueError: when the path to the catalogue doesn't exist.
-
-        Returns:
-            str: the full path to the catalogue in Linux formatting.
+    def read_catalogue(filter_compressed_data: bool = True, lowercase: bool = True, verbose: int = 0) -> pd.DataFrame:
         """
-
-        path = '/archive/science_data/stereo/lz/L0/b/summary/sccB201207.img.eu'
-        if not os.path.exists(path): raise ValueError('Catalogue not found. You need to be connected to the .ias.u-psud.fr server to access the archive.')
-        return path
-    
-    @staticmethod
-    def flat_path() -> str:
-        """Gives the full path to the STEREO flat that should be used for the L0 files.
-
-        Raises:
-            ValueError: when the path to the flat doesn't exist.
-
-        Returns:
-            str: the full path to the flat in Linux formatting.
-        """
-
-        path = '/usr/local/ssw/stereo/secchi/calibration/20060823_wav171_fCeuB.fts'
-        if not os.path.exists(path): raise ValueError('Catalogue not found. You need to be connected to the .ias.u-psud.fr server to access the archive.')
-        return path
-    
-    @typechecked
-    @staticmethod
-    def read_catalogue(filter_compressed_data: bool = True, lowercase: bool = True) -> pd.DataFrame:
-        """To read the STEREO catalogue and output the corresponding pandas.DataFrame object.
+        To read the STEREO catalogue and output the corresponding pandas.DataFrame object.
 
         Args:
             filter_compressed_data (bool, optional): Choosing to filter the highly compressed data from the catalogue. From what I was told, these files
             are so compressed that they are basically unusable. Defaults to True.
             lowercase (bool, optional): changes all the pandas.DataFrame headers to lowercase. Defaults to True.
+            verbose (int, optional): defines the level of the prints. 0 means none and the higher the more low level are the prints. Defaults to 0.
 
         Returns:
             pd.DataFrame: the pandas.DataFrame object corresponding to the STEREO catalogue. The headers are (if lower_case=True):
             'filename', 'dateobs', 'tel', 'exptime', 'xsize', 'ysize', 'filter', 'polar', 'prog', 'osnum', 'dest', 'fps', 'led', 'cmprs', 'nmiss'.
         """
         
-        catalogue_filepath = StereoUtils.catalogue_path()
-        with open(catalogue_filepath, 'r') as catalogue:
-            header_line = catalogue.readline().strip()
+        # Server connection check
+        # if not os.path.exists(StereoUtils.catalogue_path): catalogue_buffer = ServerUtils.ssh_connect(StereoUtils.catalogue_path, verbose=verbose)
+        # TODO: can only add this part when I change the connection to a temporary drive creation
+
+        with open(StereoUtils.catalogue_path, 'r') as catalogue: header_line = catalogue.readline().strip()
         headers = [header.strip() for header in header_line.split()]
         if lowercase: headers = [header.lower() for header in headers]
     
-        df = pd.read_csv(catalogue_filepath, delimiter='|', skiprows=2, names=headers)
+        df = pd.read_csv(StereoUtils.catalogue_path, delimiter='|', skiprows=2, names=headers)
         df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x) # remove trailing whitespaces in the values 
 
-        if filter_compressed_data: df = df[df['dest'] != 'SW']
+        if filter_compressed_data: df = df[df['dest'] != 'SW']  # not using the compressed data
         return df.reset_index(drop=True)
 
     @staticmethod
     def fullpath(filenames: str | list[str] | pd.Series) -> str | list[str]:
-        """Gives the fullpath to a stereo filename. 
+        """
+        Gives the fullpath to a stereo filename. 
 
         Args:
             filename (str | list[str]): the filename or filenames of stereo files.
@@ -101,29 +80,28 @@ class StereoUtils:
         Returns:
             str | list[str]: the fullpath of the given STEREO filenames.
         """
-
-        # Function initial set up
-        directory_path = '/archive/science_data/stereo/lz/L0/b/img/euvi'
+        
+        # Type changing
         if isinstance(filenames, str): filenames = [filenames]
+        
         len_filenames = len(filenames)
-
         list_fullpath = [None] * len_filenames
         for i, filename in enumerate(filenames):
             pattern_match = StereoUtils.stereo_filename_pattern.match(filename)
 
             if pattern_match: 
                 date = pattern_match.group('date')
+                list_fullpath[i] = os.path.join(StereoUtils.file_directory_path, date, filename)
             else:
-                raise ValueError(f"STEREO filename did not match with: {filename}")
-            list_fullpath[i] = os.path.join(directory_path, date, filename)
+                raise ValueError(f"STEREO filename did not match with: {filename}")    
         
         if len_filenames == 1: return list_fullpath[0]
         return list_fullpath
 
-    @typechecked
     @staticmethod
     def image_preprocessing(filenames: str | list[str] | pd.Series, clip_percentages: tuple[int | float, int | float] = (1, 99.99), clip_nan: bool = True,
                             log: bool = True, log_lowercut: int = 1) -> np.ndarray:
+        """Not finished yet as I don't remember exactly what needs to be kept and what shouldn't"""
         
         if isinstance(filenames, str): 
             filenames = [filenames]

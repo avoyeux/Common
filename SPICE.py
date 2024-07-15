@@ -1,12 +1,12 @@
 #!/usr/bin/env python3.11
 """
 Stores useful functions related to the SPICE data.
-It is a copy of the common.py file of Dr. Gabrielle Pelouze for whom I had worked for.
+It mostly copy of the common.py file of Dr. Gabriel Pelouze for whom I had worked for.
 Only small changes were applied to better correspond to my usage and code style (I don't really follow the PEP 8 guidelines...).
 Furthermore. some functions that I don't need were taken out.
 This code is actually one of the first 'proper' codes that I have used and the basics for the Common repository I have created.
 
-Sir's github can be found here: https://github.com/gpelouze
+Dr. Pelouze's github can be found here: https://github.com/gpelouze
 """
 
 # IMPORTS
@@ -17,7 +17,7 @@ import pandas as pd
 from dateutil.parser import parse as parse_date
 
 # Personal libraries
-from .ServerConnection import ServerUtils
+from .ServerConnection import TemporaryMirroredFilesystem
 
 
 class SpiceUtils:
@@ -68,15 +68,25 @@ class SpiceUtils:
         Source: https://spice-wiki.ias.u-psud.fr/doku.php/data:data_analysis_manual:read_catalog_python
         """
 
+        # Setup
         main_path = os.path.join('/archive', 'SOLAR-ORBITER', 'SPICE')
-        cat_file = os.path.join(main_path, 'fits', 'spice_catalog.csv')
+        catalogue_filepath = os.path.join(main_path, 'fits', 'spice_catalog.csv')
         date_columns = ['DATE-BEG', 'DATE', 'TIMAQUTC']
 
-        if not os.path.exists(main_path):
-            if verbose > 1: print(f"\033[37mCouldn't find the SPICE archive in local. Trying to connect to the IAS server.\033[0m", flush=flush)
-            cat_file = ServerUtils.ssh_connect(cat_file, verbose=verbose, flush=flush)
+        # Finding the file
+        if os.path.exists(main_path):
+            df = pd.read_csv(catalogue_filepath, low_memory=False, na_values="MISSING", parse_dates=date_columns)
+        else:
+            if verbose > 1: print(f"\033[37mCouldn't find the SPICE archive. Connecting to the server ...\033[0m", flush=flush)
 
-        df = pd.read_csv(cat_file, low_memory=False, na_values="MISSING", parse_dates=date_columns)
+            # Get file from the server
+            catalogue_filepath = TemporaryMirroredFilesystem.remote_to_local(catalogue_filepath)
+            df = pd.read_csv(catalogue_filepath, low_memory=False, na_values="MISSING", parse_dates=date_columns)
+
+            # Cleanup temporary folder
+            TemporaryMirroredFilesystem.cleanup()
+
+        # Striping the useless spaces
         df.LEVEL = df.LEVEL.apply(lambda string: string.strip() if isinstance(string, str) else string)
         df.STUDYTYP = df.STUDYTYP.apply(lambda string: string.strip() if isinstance(string, str) else string)
         return df

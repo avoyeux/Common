@@ -4,7 +4,6 @@ Has functions that help me when multiprocessing.
 """
 
 import numpy as np
-from typeguard import typechecked
 from multiprocessing.shared_memory import SharedMemory
 
 

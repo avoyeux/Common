@@ -12,14 +12,13 @@ import subprocess
 from io import BytesIO
 from paramiko import SSHClient, AutoAddPolicy
 
-from .Decorators import Decorators
+
 
 class ServerUtils:
     """
     Stores functions that are related to the server connection. 
     """
     
-    @Decorators.running_time
     @staticmethod
     def slow_remote_access(remote_filepaths: str | list[str], server_username: str = 'avoyeux', private_keypath: str = '/home/avoyeux/.ssh/id_rsa', ssh_port: int = 22,
                       first_hostname: str = 'ias-ssh.ias.u-psud.fr', second_hostname: str = 'sol-calcul1.ias.u-psud.fr', raise_error: bool = True, 
@@ -99,7 +98,6 @@ class ServerUtils:
         if len(remote_files) == 1: return remote_files[0]
         return remote_files
     
-    @Decorators.running_time
     @staticmethod
     def ssh_connect(filepaths: str | list[str], raise_error: bool = True, verbose: int = 0, flush: bool = False) -> BytesIO | list[BytesIO] | None:
         """
@@ -160,14 +158,14 @@ class TemporaryMirroredFilesystem:
     # Initial temporary directory setup 
     filesystem_directory_path = tempfile.mkdtemp()  # the path to the main directory for the temporary filesystem mirroring
 
-    @Decorators.running_time
     @staticmethod
     def remote_to_local(remote_filepaths: str | list[str], host_shortcut: str = 'sol', strip_level: int = 2, compress: str | None = 'z', 
                         raise_error: bool = True) -> str | list[str] | None:
         """
         Given server filepath(s), it returns the created corresponding local filepath(s). Partially mirrors the server directory paths inside a temporary folder.
 
-        This method is based on running an ssh and tar bash command on the shell and, as such, will likely not work on Windows OS (I no nothing of macOS though).
+        This method is based on running an ssh and tar bash command on the shell. It uses WSL if the OS is Windows and, as such, a Windows user needs to have 
+        set up WSL through the Microsoft store.
 
         Args:
             remote_filepaths (str | list[str]): the filepath(s) to the remote files.
@@ -190,10 +188,16 @@ class TemporaryMirroredFilesystem:
         compress = compress if compress is not None else ''
         remote_filepaths_str = ' '.join(remote_filepaths)
 
+        # Temporary folder check
+        if not os.path.exists(TemporaryMirroredFilesystem.filesystem_directory_path): TemporaryMirroredFilesystem._recreate_filesystem()
+
         # Bash commands
         tar_creation_command = f'tar c{compress}f - --absolute-names {remote_filepaths_str}'
         tar_extraction_command = f"tar x{compress}f - --strip-components={strip_level} --absolute-names -C {TemporaryMirroredFilesystem.filesystem_directory_path}"
         bash_command = f"ssh {host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"
+
+        # Checking if the user is on Windows
+        if os.name == 'nt': bash_command = 'wsl ' + bash_command
 
         # Bash run
         result = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -211,6 +215,14 @@ class TemporaryMirroredFilesystem:
 
         if len(local_filepaths) == 1: return local_filepaths[0]
         return local_filepaths
+    
+    @classmethod
+    def _recreate_filesystem(cls) -> None:
+        """
+        To recreate the main temporary folder if it was already removed.
+        """
+
+        cls.filesystem_directory_path = tempfile.mkdtemp()
 
     @staticmethod
     def cleanup(verbose: int = 0) -> None:
@@ -224,4 +236,6 @@ class TemporaryMirroredFilesystem:
         if os.path.exists(TemporaryMirroredFilesystem.filesystem_directory_path):
             shutil.rmtree(TemporaryMirroredFilesystem.filesystem_directory_path)
         elif verbose > 0:
-            print(f"\033[37mcleanup: temporary filesystem {TemporaryMirroredFilesystem.filesystem_directory_path} already deleted.\033[0m")
+            print(f"\033[37mcleanup: temporary filesystem {TemporaryMirroredFilesystem.filesystem_directory_path} already removed.\033[0m")
+
+

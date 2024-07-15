@@ -13,7 +13,7 @@ import pandas as pd
 from astropy.io import fits
 
 # Personal libraries
-from .ServerConnection import ServerUtils
+from .ServerConnection import TemporaryMirroredFilesystem
 
 
 class StereoUtils:
@@ -36,7 +36,7 @@ class StereoUtils:
     catalogue_path = '/archive/science_data/stereo/lz/L0/b/summary/sccB201207.img.eu'  # path to the STEREO catalogue
     
     @staticmethod
-    def read_catalogue(filter_compressed_data: bool = True, lowercase: bool = True, verbose: int = 0) -> pd.DataFrame:
+    def read_catalogue(filter_compressed_data: bool = True, lowercase: bool = True, verbose: int = 0, flush: bool = False) -> pd.DataFrame:
         """
         To read the STEREO catalogue and output the corresponding pandas.DataFrame object.
 
@@ -51,18 +51,24 @@ class StereoUtils:
             'filename', 'dateobs', 'tel', 'exptime', 'xsize', 'ysize', 'filter', 'polar', 'prog', 'osnum', 'dest', 'fps', 'led', 'cmprs', 'nmiss'.
         """
         
-        # Server connection check
-        # if not os.path.exists(StereoUtils.catalogue_path): catalogue_buffer = ServerUtils.ssh_connect(StereoUtils.catalogue_path, verbose=verbose)
-        # TODO: can only add this part when I change the connection to a temporary drive creation
+        # File check
+        if os.path.exists(StereoUtils.catalogue_path): 
+            catalogue_path = StereoUtils.catalogue_path
+        else:
+            if verbose > 0: print("\033[37mSTEREO catalogue not found. Connecting to server ...", flush=flush)
+            catalogue_path = TemporaryMirroredFilesystem.remote_to_local(StereoUtils.catalogue_path)
+            if verbose > 0: print("\033[37mSTEREO catalogue fetched\033[0m", flush=flush)
 
-        with open(StereoUtils.catalogue_path, 'r') as catalogue: header_line = catalogue.readline().strip()
+        with open(catalogue_path, 'r') as catalogue: header_line = catalogue.readline().strip()
         headers = [header.strip() for header in header_line.split()]
         if lowercase: headers = [header.lower() for header in headers]
     
-        df = pd.read_csv(StereoUtils.catalogue_path, delimiter='|', skiprows=2, names=headers)
+        df = pd.read_csv(catalogue_path, delimiter='|', skiprows=2, names=headers)
         df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x) # remove trailing whitespaces in the values 
 
         if filter_compressed_data: df = df[df['dest'] != 'SW']  # not using the compressed data
+
+        TemporaryMirroredFilesystem.cleanup()  # removing temporary folder if created
         return df.reset_index(drop=True)
 
     @staticmethod

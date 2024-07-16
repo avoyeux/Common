@@ -17,7 +17,7 @@ import pandas as pd
 from dateutil.parser import parse as parse_date
 
 # Personal libraries
-from .ServerConnection import TemporaryMirroredFilesystem
+from .ServerConnection import SshMirroredFilesystem
 
 
 class SpiceUtils:
@@ -80,11 +80,11 @@ class SpiceUtils:
             if verbose > 1: print(f"\033[37mCouldn't find the SPICE archive. Connecting to the server ...\033[0m", flush=flush)
 
             # Get file from the server
-            catalogue_filepath = TemporaryMirroredFilesystem.remote_to_local(catalogue_filepath)
+            catalogue_filepath = SshMirroredFilesystem.remote_to_local(catalogue_filepath)
             df = pd.read_csv(catalogue_filepath, low_memory=False, na_values="MISSING", parse_dates=date_columns)
 
             # Cleanup temporary folder
-            TemporaryMirroredFilesystem.cleanup()
+            SshMirroredFilesystem.cleanup()
 
         # Striping the useless spaces
         df.LEVEL = df.LEVEL.apply(lambda string: string.strip() if isinstance(string, str) else string)

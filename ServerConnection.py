@@ -5,6 +5,7 @@ To store functions related to the ias server connection.
 
 # IMPORTS
 import os
+import time
 import shutil
 import tempfile
 import subprocess
@@ -102,7 +103,7 @@ class ServerUtils:
     def ssh_connect(filepaths: str | list[str], raise_error: bool = True, verbose: int = 0, flush: bool = False) -> BytesIO | list[BytesIO] | None:
         """
         To access the sol-calcul1.ias.u-psud server and save the data (reference by the filepaths argument) in the RAM for local use.
-        Quick but slower than using the TemporaryMirroredFilesystem class because this method converts the output of a bash cat function to bytes to save the 
+        Quick but slower than using the SshMirroredFilesystem class because this method converts the output of a bash cat function to bytes to save the 
         corresponding file data. The ssh connection is only done once regardless of the number of filepaths given so it is still fairly quick.
 
         Args:
@@ -147,16 +148,146 @@ class ServerUtils:
         return files_in_memory
     
 
-class TemporaryMirroredFilesystem:
+class SshMirroredFilesystem:
     """
     To create a temporary filesystem that partially mirrors the server archive for the desired files.
 
      - The remote directory creation is set in class level, i.e. it is created as this python file is imported.
-     - The deletion of the filesystem has to be set manually using TemporaryMirroredFilesystem.cleanup().
+     - The deletion of the filesystem has to be set manually using SshMirroredFilesystem.cleanup().
     """
 
-    # Initial temporary directory setup 
-    filesystem_directory_path = tempfile.mkdtemp()  # the path to the main directory for the temporary filesystem mirroring
+    directory_path = tempfile.mkdtemp()  # the path to the main directory for the temporary filesystem mirroring
+    os_name = os.name  # Getting the name of the OS to see if the user is on Windows. If so WSL is used for the bash commands
+
+    def __init__(self, host_shortcut: str = 'sol', raise_errors: bool = True, compression: str = 'z', verbose: int = 0, flush: bool = False) -> None:
+        
+        self.host_shortcut = host_shortcut
+        self.raise_errors = raise_errors
+        self.compression = compression
+        self.verbose = verbose
+        self.flush = flush
+
+        self.ctrl_socket_filepath = os.path.join(tempfile.gettempdir(), 'control-socket-file')
+
+        # Ssh connection
+        self._activate()
+
+    def _activate(self) -> None:
+
+        bash_command = f'ssh -M -S {self.ctrl_socket_filepath} -fN {self.host_shortcut}'
+
+        # OS check
+        if SshMirroredFilesystem.os_name == 'nt': bash_command = 'wsl' + bash_command
+
+        # Bash run
+        if self.verbose > 1: print(f'\033[37mConnecting to {self.host_shortcut} ...\033[0m', flush=self.flush)
+
+        process = subprocess.Popen(bash_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE) # Need to check this. doesn't seem to work
+        time.sleep(5)
+
+        # if process.poll() is None:
+        #     print('connection success')
+        # else:
+
+        #     # Capture the results
+        #     print('here')
+        #     stdout, stderr = process.communicate()
+        #     print('communicate done')
+        #     stdout = stdout.decode()
+        #     stderr = stderr.decode()
+
+        #     # Bash errors
+        #     if process.returncode != 0 or process.stderr:
+        #         error_message = process.stderr
+        #         if self.raise_errors:
+        #             raise Exception(f'Failed connection to {self.host_shortcut}. Error: {error_message}')
+        #         if self.verbose > 0:
+        #             print(f'Failed connection to {self.host_shortcut}. Error: {error_message}', flush=self.flush)
+        #     else:
+        #         if self.verbose > 1:
+        #             print('Connection successful.', flush=self.flush)
+        # # Bash errors
+        # if result.stderr:
+        #     if self.raise_errors: raise Exception(f'\033[1;31mFailed connection to {self.host_shortcut}. Error: {result.stderr}\033[0m')
+        #     if self.verbose > 0: print(f'\033[1;31mFailed connection to {self.host_shortcut}. Error: {result.stderr}\033[0m', flush=self.flush)
+
+        if self.verbose > 1: print(f'\033[37mConnection successful.\033[0m', flush=self.flush)
+
+    def mirror(self, remote_filepaths: str | list[str], strip_level: int = 2) -> str | list[str] | None:
+        """
+        Given server filepath(s), it returns the created corresponding local filepath(s). Partially mirrors the server directory paths inside a temporary folder.
+
+        This method is based on running an ssh and tar bash command on the shell. It uses WSL if the OS is Windows and, as such, a Windows user needs to have 
+        set up WSL through the Microsoft store.
+
+        Args:
+            remote_filepaths (str | list[str]): the filepath(s) to the remote files.
+            strip_level (int, optional): set the --strip-components tar command option. Hence, it sets how many parent folder to each files are removed in the 
+                temporary local mirrored filesystem. This is why the mirroring is only partial. Defaults to 2.
+
+        Raises:
+            Exception: shell error if raise_error set to True.
+
+        Returns:
+            str | list[str] | None: the created local filepaths. If there is a shell error and raise_error=True, returns None.
+        """
+
+        # Setup        
+        if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
+        remote_filepaths_str = ' '.join(remote_filepaths)
+
+        # Temporary folder check
+        self._recreate_filesystem()
+
+        # Bash commands
+        tar_creation_command = f'tar c{self.compression}f - --absolute-names {remote_filepaths_str}'
+        tar_extraction_command = f"tar x{self.compression}f - -C {SshMirroredFilesystem.directory_path} --absolute-names --strip-components={strip_level}"
+        bash_command = f"ssh -S {self.ctrl_socket_filepath} {self.host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"  
+
+        # OS check
+        if SshMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
+
+        # Bash run
+        result = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
+    
+        # Errors
+        if result.stderr:
+            if self.raise_errors: raise Exception(f"\033[1;31mFunction fetch_tar unable to get the files from the server. Error: {result.stderr.decode().strip()}\033[0m")
+            return 
+        
+        # Local filepath setup 
+        length = len(remote_filepaths)
+        local_filepaths = [None] * length
+        for i in range(length): local_filepaths[i] = os.path.join(SshMirroredFilesystem.directory_path, self._strip(remote_filepaths[i], 1))
+
+        if len(local_filepaths) == 1: return local_filepaths[0]
+        return local_filepaths
+
+    def close(self) -> None:
+
+        bash_command = f'ssh -S {self.ctrl_socket_filepath} -O exit sol',
+    
+        # OS check
+        if SshMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
+
+        # Bash run
+        result = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
+
+        # Bash errors
+        if result.stderr and self.verbose > 0:
+            error_message = result.stderr.decode().strip()
+            if error_message != 'Exit request sent.':
+                print(f'\033[1;31mFailed to disconnect from {self.host_shortcut}. Error: {error_message}\033[0m', flush=self.flush)
+
+    @staticmethod
+    def _strip(fullpath: str, strip_level: int) -> str:
+
+        # Path separation
+        parts = fullpath.split(os.sep)
+
+        # Strip
+        path_stripped = parts[strip_level:] if len(parts) > 2 else parts
+        return os.path.join(*path_stripped)
 
     @staticmethod
     def remote_to_local(remote_filepaths: str | list[str], host_shortcut: str = 'sol', strip_level: int = 2, compress: str | None = 'z', 
@@ -189,29 +320,28 @@ class TemporaryMirroredFilesystem:
         remote_filepaths_str = ' '.join(remote_filepaths)
 
         # Temporary folder check
-        if not os.path.exists(TemporaryMirroredFilesystem.filesystem_directory_path): TemporaryMirroredFilesystem._recreate_filesystem()
+        SshMirroredFilesystem._recreate_filesystem()
 
         # Bash commands
         tar_creation_command = f'tar c{compress}f - --absolute-names {remote_filepaths_str}'
-        tar_extraction_command = f"tar x{compress}f - --strip-components={strip_level} --absolute-names -C {TemporaryMirroredFilesystem.filesystem_directory_path}"
+        tar_extraction_command = f"tar x{compress}f - --strip-components={strip_level} --absolute-names -C {SshMirroredFilesystem.directory_path}"
         bash_command = f"ssh {host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"
 
-        # Checking if the user is on Windows
-        if os.name == 'nt': bash_command = 'wsl ' + bash_command
+        # OS check
+        if SshMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
 
         # Bash run
-        result = subprocess.run(bash_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
     
         # Errors
         if result.stderr:
             if raise_error: raise Exception(f"\033[1;31mFunction fetch_tar unable to get the files from the server. Error: {result.stderr.decode()}\033[0m")
             return 
         
-        # Local filepath setup
-        i = -1
-        local_filepaths = [None] * len(remote_filepaths)
-        for root, _, files in os.walk(TemporaryMirroredFilesystem.filesystem_directory_path): 
-            for name in files: i += 1; local_filepaths[i] = os.path.join(root, name)
+        # Local filepath setup 
+        length = len(remote_filepaths)
+        local_filepaths = [None] * length
+        for i in range(length): local_filepaths[i] = os.path.join(SshMirroredFilesystem.directory_path, SshMirroredFilesystem._strip(remote_filepaths[i], 1))
 
         if len(local_filepaths) == 1: return local_filepaths[0]
         return local_filepaths
@@ -222,7 +352,7 @@ class TemporaryMirroredFilesystem:
         To recreate the main temporary folder if it was already removed.
         """
 
-        cls.filesystem_directory_path = tempfile.mkdtemp()
+        if not os.path.exists(cls.directory_path): cls.directory_path = tempfile.mkdtemp()
 
     @staticmethod
     def cleanup(verbose: int = 0) -> None:
@@ -233,9 +363,9 @@ class TemporaryMirroredFilesystem:
             verbose (int, optional): if > 0 gives out a print when the temporary folder doesn't exist. Defaults to 0.
         """
 
-        if os.path.exists(TemporaryMirroredFilesystem.filesystem_directory_path):
-            shutil.rmtree(TemporaryMirroredFilesystem.filesystem_directory_path)
+        if os.path.exists(SshMirroredFilesystem.directory_path):
+            shutil.rmtree(SshMirroredFilesystem.directory_path)
         elif verbose > 0:
-            print(f"\033[37mcleanup: temporary filesystem {TemporaryMirroredFilesystem.filesystem_directory_path} already removed.\033[0m")
+            print(f"\033[37mcleanup: temporary filesystem {SshMirroredFilesystem.directory_path} already removed.\033[0m")
 
 

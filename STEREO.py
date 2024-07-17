@@ -13,7 +13,7 @@ import pandas as pd
 from astropy.io import fits
 
 # Personal libraries
-from .ServerConnection import SshMirroredFilesystem
+from .ServerConnection import SSHMirroredFilesystem
 
 
 class StereoUtils:
@@ -56,7 +56,7 @@ class StereoUtils:
             catalogue_path = StereoUtils.catalogue_path
         else:
             if verbose > 0: print("\033[37mSTEREO catalogue not found. Connecting to server ...", flush=flush)
-            catalogue_path = SshMirroredFilesystem.remote_to_local(StereoUtils.catalogue_path)
+            catalogue_path = SSHMirroredFilesystem.remote_to_local(StereoUtils.catalogue_path)
             if verbose > 0: print("\033[37mSTEREO catalogue fetched\033[0m", flush=flush)
 
         with open(catalogue_path, 'r') as catalogue: header_line = catalogue.readline().strip()
@@ -68,7 +68,7 @@ class StereoUtils:
 
         if filter_compressed_data: df = df[df['dest'] != 'SW']  # not using the compressed data
 
-        SshMirroredFilesystem.cleanup()  # removing temporary folder if created
+        SSHMirroredFilesystem.cleanup()  # removing temporary folder if created
         return df.reset_index(drop=True)
 
     @staticmethod

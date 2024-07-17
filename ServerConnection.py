@@ -173,6 +173,7 @@ class SSHMirroredFilesystem:
         Args:
             host_shortcut (str, optional): the shortcut for the host connection (as configured in the ~/.ssh/config file on Unix). Defaults to 'sol'.
             compression (str, optional): the compression method used by tar. Choices are 'z'(gzip), 'j'(bzip2), 'J'(xz), ''(None). Defaults to 'z'.
+            connection_timeout (int | float, optional): the time in seconds before a TimeoutError is raised if the connection hasn't yet been done. Defaults to 20.
             verbose (int, optional): sets the level of the prints. The higher the value, the more prints there are. Defaults to 0.
             flush (bool, optional): sets the internal buffer to immediately write the output to it's destination, i.e. it decides to force the prints or not. 
                 Has a negative effect on the running efficiency as you are forcing the buffer but makes sure that the print is outputted exactly when it is 
@@ -215,7 +216,7 @@ class SSHMirroredFilesystem:
             if self.verbose > 1: print(f'\033[37mConnection successful.\033[0m', flush=self.flush)
         else:
             process.terminate()
-            raise Exception(f'\033[1;31mServer SSH connection timeout after {self.timeout} seconds.\033[0m')
+            raise TimeoutError(f'\033[1;31mServer SSH connection timeout after {self.timeout} seconds.\033[0m')
     
     def _check_connection(self, process: subprocess.Popen) -> bool:
         """

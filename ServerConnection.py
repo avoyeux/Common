@@ -103,8 +103,8 @@ class ServerUtils:
     def ssh_connect(filepaths: str | list[str], raise_error: bool = True, verbose: int = 0, flush: bool = False) -> BytesIO | list[BytesIO] | None:
         """
         To access the sol-calcul1.ias.u-psud server and save the data (reference by the filepaths argument) in the RAM for local use.
-        Quick but slower than using the SSHMirroredFilesystem class because this method converts the output of a bash cat function to bytes to save the 
-        corresponding file data. The ssh connection is only done once regardless of the number of filepaths given so it is still fairly quick.
+        Quick but slower than using the SSHMirroredFilesystem class because this method converts the output of a bash cat command to bytes to save the 
+        corresponding file data. The SSH connection is only done once regardless of the number of filepaths given so it is still fairly quick.
 
         Args:
             filepaths (str | list[str]): the full server filepaths to the files to be used.
@@ -167,7 +167,7 @@ class SSHMirroredFilesystem:
 
     def __init__(self, host_shortcut: str = 'sol', compression: str = 'z', connection_timeout: int | float = 20, verbose: int = 0, flush: bool = False) -> None:
         """
-        Initialising the class. It opens an ssh connection to the server by saving a control socket file in the OS specific temporary directory.
+        It opens an ssh connection to the server by saving a control socket file in the OS specific temporary directory.
         WSL needs to be set up if the user is on Windows OS.
 
         Args:
@@ -201,6 +201,7 @@ class SSHMirroredFilesystem:
             Exception: if the ssh connection fails.
         """
 
+        # Command to run
         bash_command = f'ssh -M -S {self.ctrl_socket_filepath} -fN {self.host_shortcut}'
 
         # OS check
@@ -208,7 +209,6 @@ class SSHMirroredFilesystem:
 
         # Bash run
         if self.verbose > 1: print(f'\033[37mConnecting to {self.host_shortcut} ...\033[0m', flush=self.flush)
-
         process = subprocess.Popen(bash_command, shell=True, stderr=subprocess.PIPE) 
 
         # Connection check
@@ -220,8 +220,8 @@ class SSHMirroredFilesystem:
     
     def _check_connection(self, process: subprocess.Popen) -> bool:
         """
-        Checks if the ssh master connection was created (i.e. if the control socket file exists). If not, waits 100ms before checking again. Also looks if the process
-        finished and catches the corresponding error.
+        Checks if the ssh master connection was created (i.e. if the control socket file exists). If not, waits 100ms before checking again. Also looks if the 
+        process finished and catches the corresponding error.
 
         Args:
             process (subprocess.Popen): the bash process for creating the SSH master connection.
@@ -272,7 +272,7 @@ class SSHMirroredFilesystem:
         # Temporary folder check
         self._recreate_filesystem()
 
-        # Bash commands
+        # Bash command
         tar_creation_command = f'tar c{self.compression}f - --absolute-names {remote_filepaths_str}'
         tar_extraction_command = f"tar x{self.compression}f - -C {SSHMirroredFilesystem.directory_path} --absolute-names --strip-components={strip_level}"
         bash_command = f"ssh -S {self.ctrl_socket_filepath} {self.host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"  
@@ -281,10 +281,10 @@ class SSHMirroredFilesystem:
         if SSHMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
 
         # Bash run
-        result = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
+        process = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
     
         # Errors
-        if result.stderr: raise Exception(f"\033[1;31mFunction 'mirror' unable to get the files from the server. Error: {result.stderr.decode().strip()}\033[0m")
+        if process.stderr: raise Exception(f"\033[1;31mFunction 'mirror' didn't get the file(s). Error: {process.stderr.decode().strip()}\033[0m")
         
         # Local filepath setup 
         length = len(remote_filepaths)
@@ -309,34 +309,13 @@ class SSHMirroredFilesystem:
         if SSHMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
 
         # Bash run
-        result = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
+        process = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
 
         # Bash errors
-        if result.stderr and self.verbose > 0:
-            error_message = result.stderr.decode().strip()
+        if process.stderr and self.verbose > 0:
+            error_message = process.stderr.decode().strip()
             if error_message != 'Exit request sent.':
                 print(f'\033[1;31mFailed to disconnect from {self.host_shortcut}. Error: {error_message}\033[0m', flush=self.flush)
-
-    @staticmethod
-    def _strip(fullpath: str, strip_level: int) -> str:
-        """
-        Strips the leading directories of a filepath just like the --strip-components command used with tar in bash. If the strip_level is too high, only the 
-        filename is kept.
-
-        Args:
-            fullpath (str): the filepath.
-            strip_level (int): number of leading directories to be stripped.
-
-        Returns:
-            str: the filepath after being stripped.
-        """
-
-        # Path separation
-        parts = fullpath.strip(os.sep).split(os.sep)
-
-        # Strip
-        path_stripped = parts[strip_level:] if len(parts) > strip_level else [parts[-1]]
-        return os.path.join(*path_stripped)
 
     @staticmethod
     def remote_to_local(remote_filepaths: str | list[str], host_shortcut: str = 'sol', compression: str = 'z', strip_level: int = 2) -> str | list[str]:
@@ -379,7 +358,7 @@ class SSHMirroredFilesystem:
         result = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
     
         # Errors
-        if result.stderr: raise Exception(f"\033[1;31mFunction fetch_tar unable to get the files from the server. Error: {result.stderr.decode()}\033[0m")
+        if result.stderr: raise Exception(f"\033[1;31mFunction 'remote_to_local' didn't get the file(s). Error: {result.stderr.decode().strip()}\033[0m")
         
         # Local filepath setup 
         length = len(remote_filepaths)
@@ -387,15 +366,7 @@ class SSHMirroredFilesystem:
         for i in range(length): local_filepaths[i] = os.path.join(SSHMirroredFilesystem.directory_path, SSHMirroredFilesystem._strip(remote_filepaths[i], 1))
 
         if len(local_filepaths) == 1: return local_filepaths[0]
-        return local_filepaths
-    
-    @classmethod
-    def _recreate_filesystem(cls) -> None:
-        """
-        To recreate the main temporary folder if it was already removed.
-        """
-
-        if not os.path.exists(cls.directory_path): cls.directory_path = tempfile.mkdtemp()
+        return local_filepaths    
 
     @staticmethod
     def cleanup(verbose: int = 0) -> None:
@@ -408,7 +379,35 @@ class SSHMirroredFilesystem:
 
         if os.path.exists(SSHMirroredFilesystem.directory_path):
             shutil.rmtree(SSHMirroredFilesystem.directory_path)
+            if verbose > 0: print(f"\033[37mcleanup: temporary filesystem {SSHMirroredFilesystem.directory_path} removed.\033[0m")
         elif verbose > 0:
             print(f"\033[37mcleanup: temporary filesystem {SSHMirroredFilesystem.directory_path} already removed.\033[0m")
 
+    @staticmethod
+    def _strip(fullpath: str, strip_level: int) -> str:
+        """
+        Strips the leading directories of a filepath just like the --strip-components command used with tar in bash. If the strip_level is too high, only the 
+        filename is kept.
 
+        Args:
+            fullpath (str): the filepath.
+            strip_level (int): number of leading directories to be stripped.
+
+        Returns:
+            str: the filepath after being stripped.
+        """
+
+        # Path separation
+        parts = fullpath.strip(os.sep).split(os.sep)
+
+        # Strip
+        path_stripped = parts[strip_level:] if len(parts) > strip_level else [parts[-1]]
+        return os.path.join(*path_stripped)
+    
+    @classmethod
+    def _recreate_filesystem(cls) -> None:
+        """
+        To recreate the main temporary folder if it was already removed.
+        """
+
+        if not os.path.exists(cls.directory_path): cls.directory_path = tempfile.mkdtemp()

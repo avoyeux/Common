@@ -147,7 +147,7 @@ class ServerUtils:
         if len(files_in_memory) == 1: return files_in_memory[0]
         return files_in_memory
     
-
+#TODO: important to later update this class. Problem being that if the class is used twice while only one cleanup is needed at a given time, then it cleanup everything by default...
 class SSHMirroredFilesystem:
     """
     To create a temporary filesystem that partially mirrors the server archive for the desired files. For Windows OS users, you need to have WSL installed for these

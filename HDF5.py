@@ -7,7 +7,7 @@ To help when using the HDF5 format. Initial created to have a similar option tha
 import os
 import h5py
 
-from typing import Self
+from typing import Self  # used to type annotate an instance of a class
 
 # Personal imports
 from .ServerConnection import SSHMirroredFilesystem

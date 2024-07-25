@@ -9,144 +9,34 @@ import time
 import shutil
 import tempfile
 import subprocess
-
-from io import BytesIO
-from paramiko import SSHClient, AutoAddPolicy
+import multiprocessing as mp
 
 
 
-class ServerUtils:
+# PUBLIC API
+__all__ = ['SSHMirroredFilesystem']
+
+
+
+class MirroredFilesystemHelper:
     """
-    Stores functions that are related to the server connection. 
+    To help manage the filesystem for the SSHMirroredFilesystem class. It is therefore a private class.
     """
-    
-    @staticmethod
-    def slow_remote_access(remote_filepaths: str | list[str], server_username: str = 'avoyeux', private_keypath: str = '/home/avoyeux/.ssh/id_rsa', ssh_port: int = 22,
-                      first_hostname: str = 'ias-ssh.ias.u-psud.fr', second_hostname: str = 'sol-calcul1.ias.u-psud.fr', raise_error: bool = True, 
-                      verbose: int = 1, flush: bool = False, bufsize: int = 10 * 1024 * 1024, window_size: int = 3 * 1024 * 1024, packet_size: int = 32 * 1024) -> list[BytesIO]:
-        """
-        Functions that connects to the sol-calcul1.ias.u-psud.fr server and saves the files referenced by their fullpath in the RAM. The connection is done 
-        through a private key stored locally as there should already be the equivalent public key on the server.  
-        While there are more choices for setting up the remote access using this method, it is super super slow and weirdly highly dependent on the CPU clock speed
-        (no clue why as the decoding and encoding shouldn't be that demanding). 
 
-        Args:
-            remote_filepaths (str | list[str]): the server fullpath for the files to be accessed.
-            server_username (str, optional): your username on the server. Defaults to 'avoyeux'.
-            private_keypath (str, optional): the local fullpath to the private key (with the corresponding public key already set up on the server).
-                Defaults to '/home/avoyeux/.ssh/id_rsa'.
-            port (int, optional): the ssh port value. While 22 is the usual value, it can depend on how the server administrators set it up. Defaults to 22.
-            first_hostname (str, optional): the hostname for the first part of the ssh connection. Defaults to 'ias-ssh.ias.u-psud.fr'.
-            second_hostname (str, optional): the hostname for the second part of the ssh connection. Defaults to 'sol-calcul1.ias.u-psud.fr'.
-            raise_error (bool, optional): deciding to raise the error if an error occurred when trying to read and convert a remote file. Defaults to True.
-            verbose (int, optional): set the verbosity. If > 0 the error print is given. If > 1 then all the prints are shown. Defaults to 1.
-            flush (bool, optional): sets the internal buffer to immediately write the output to it's destination, i.e. it decides to
-                force the prints or not. Has a negative effect on the running efficiency as you are forcing the buffer but makes sure that the print is outputted
-                exactly when it is called (usually not the case when multiprocessing). Defaults to False.
+    def __init__(self):
 
-        Returns:
-            list[BytesIO]: the file data that were access through the server.
-        """
+        # CONTEXT CHECK
+        self.is_multiprocessing = (os.getpid() != os.getppid())
+        self.is_threading = threading.current_thread().name != "MainThread"
+
+        # ATTRIBUTE SETUP
+        self.multi_lock = mp.Lock() if self.is_multiprocessing else None
+        self.thread_lock = threading.Lock() if self.is_threading else None
+
         
-        # Filepath setup
-        remote_filepaths = remote_filepaths if isinstance(remote_filepaths, list) else [remote_filepaths]
 
-        # First connection
-        first_client = SSHClient()
-        first_client.set_missing_host_key_policy(AutoAddPolicy())
-        first_client.connect(hostname=first_hostname, port=ssh_port, username=server_username, key_filename=private_keypath)
 
-        # Set up the forward the connection
-        first_transport = first_client.get_transport()
-        first_transport.window_size = window_size
-        first_transport.packetizer.REKEY_BYTES = pow(2, 40)
-        first_transport.packetizer.REKEY_PACKETS = pow(2, 40)
-        local_bind_address = ('127.0.0.1', 0)
 
-        # Direct-tcpip channel from the first to the second server
-        remote_bind_address = (second_hostname, ssh_port)
-        channel = first_transport.open_channel("direct-tcpip", remote_bind_address, local_bind_address, max_packet_size=packet_size)
-
-        # Connect to the second server using the second transport
-        second_client = SSHClient()
-        second_client.set_missing_host_key_policy(AutoAddPolicy())
-        second_client.connect(hostname=second_hostname, sock=channel, username=server_username, key_filename=private_keypath)
-
-        # Open the SFTP session
-        sftp = second_client.open_sftp()
-        remote_files = [None] * len(remote_filepaths)
-        for i, filepath in enumerate(remote_filepaths):
-            try:
-                remote_file = sftp.file(filepath, mode='r', bufsize=bufsize)
-                remote_file_size = remote_file.stat().st_size
-                remote_file.prefetch(remote_file_size)
-                remote_file.set_pipelined()
-                remote_files[i] = BytesIO(remote_file.read(remote_file_size))
-                remote_file.close()
-            except Exception as e:
-                if verbose > 0: print(f"\033[1;31mCouldn't read or convert file {os.path.basename(filepath)} on the server. Given error is: {e}\033[0m", flush=flush)
-                if raise_error: raise
-
-        # Closing the tunnel
-        sftp.close()
-        second_client.close()
-        first_client.close()
-
-        if verbose > 1: 
-            print(f"\033[37mFrom sol-calcul1, {len(remote_filepaths)} files were accessed and saved in RAM.\033[0m", flush=flush)
-            if not raise_error: print("\033[37mThe above number might be wrong as some files might have raise an exception. Look at the read prints.\033[0m", flush=flush)
-        
-        if len(remote_files) == 1: return remote_files[0]
-        return remote_files
-    
-    @staticmethod
-    def ssh_connect(filepaths: str | list[str], raise_error: bool = True, verbose: int = 0, flush: bool = False) -> BytesIO | list[BytesIO] | None:
-        """
-        To access the sol-calcul1.ias.u-psud server and save the data (reference by the filepaths argument) in the RAM for local use.
-        Quick but slower than using the SSHMirroredFilesystem class because this method converts the output of a bash cat command to bytes to save the 
-        corresponding file data. The SSH connection is only done once regardless of the number of filepaths given so it is still fairly quick.
-
-        Args:
-            filepaths (str | list[str]): the full server filepaths to the files to be used.
-            raise_error (bool, optional): deciding to raise an error if there is a problem when trying to access the files. Defaults to True.
-            verbose (int, optional): decides how much is being printed. Defaults to 0 (i.e. no prints).
-            flush (bool, optional): sets the internal buffer to immediately write the output to it's destination, i.e. it decides to
-                force the prints or not. Has a negative effect on the running efficiency as you are forcing the buffer but makes sure that the print is outputted
-                exactly when it is called (usually not the case when multiprocessing). Defaults to False.
-
-        Returns:
-            BytesIO | list[BytesIO] | None: the buffer references to the files given by the filepaths argument. Keep in mind that the output are
-                buffers, i.e. .close() would close the buffer and hence you would loose the data. The functions returns None if there is an error when trying to 
-                access the files and raise_error is set to False.  
-        """
-
-        if isinstance(filepaths, str): filepaths = [filepaths]
-        
-        # ssh bash command to get the data using cat and add a delimiter to later separate the data
-        delimiter = "dajlkdjlksjdlasljdlkjlfgdfeafeageaeyiokdhfgDSTSY"
-        cat_commands = '; '.join([f"cat {path} && echo -n '{delimiter}'" for path in filepaths])
-        ssh_command = f"ssh sol \"{cat_commands}\""
-        
-        if verbose > 1: 
-            print(f"\033[37mFunction ssh_connect accessing the server to get file(s): {[os.path.basename(filepath) for filepath in filepaths]}\033[0m", flush=flush)
-
-        # Running the ssh command
-        result = subprocess.run(ssh_command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        # Checking for errors
-        if result.stderr:
-            if raise_error: raise Exception(f"\033[1;31mFunction ssh_connect unable to get the files from the server. Error: {result.stderr.decode()}\033[0m")
-            return None
-
-        # Split the output into separate files based on the delimiter
-        files_data = result.stdout.split(bytes(delimiter, encoding='utf-8'))
-        files_in_memory = [BytesIO(data.strip()) for data in files_data if data.strip()]
-
-        if verbose > 1: print("\033[37mFunction ssh_connect successfully accessed and saved the file(s) in RAM.", flush=flush)
-
-        if len(files_in_memory) == 1: return files_in_memory[0]
-        return files_in_memory
-    
 #TODO: important to later update this class. Problem being that if the class is used twice while only one cleanup is needed at a given time, then it cleanup everything by default...
 class SSHMirroredFilesystem:
     """
@@ -162,8 +52,14 @@ class SSHMirroredFilesystem:
         to mirror some files to the temporary filesystem and .close() to close the open ssh connection. Again, .cleanup() is used to remove the temporary filesystem.
     """
 
+    # OS
+    os_name = os.name  # to see if the user is on Windows. If so WSL is used for the bash commands
+
+    # DIRECTORIES
     directory_path = tempfile.mkdtemp()  # the path to the main directory for the temporary filesystem
-    os_name = os.name  # the OS name to see if the user is on Windows. If so WSL is used for the bash commands
+    directory_list: list[str] = []  # list of the subdirectory names that were created. To be able to decide what to cleanup
+    # Locks for the list 
+    mp_lock = mp.Lock()
 
     def __init__(self, host_shortcut: str = 'sol', compression: str = 'z', connection_timeout: int | float = 20, verbose: int = 0, flush: bool = False) -> None:
         """
@@ -217,7 +113,46 @@ class SSHMirroredFilesystem:
         else:
             process.terminate()
             raise TimeoutError(f'\033[1;31mServer SSH connection timeout after {self.timeout} seconds.\033[0m')
-    
+        
+    @classmethod
+    def _append(cls, folder_path: str) -> None:
+        """
+        To append to the class level attribute list containing the temporary subfolders created. It does a preliminary
+        check to see if you are multiprocessing to decide if to use a lock. While initially, this also took into account if you are multithreading, now it doesn't as, after
+        further thinking, I don't see why anyone would use this code in a thread as the fetching is not really I/O bound but more dependent on the maximum Wi-Fi connection speed.
+        Furthermore, as the default is to to use compression when transferring files, it will be CPU bound before becoming I/O bound.
+
+        Args:
+            folder_path (str): path to the new created temporary sub folder.
+        """
+
+        is_multiprocessing = (os.getpid() != os.getppid())
+        if is_multiprocessing:
+            with cls.mp_lock: cls.directory_list.append(folder_path)
+        else:
+            cls.directory_list.append(folder_path)
+
+    @staticmethod
+    def _sub_creation() -> str:
+
+        # Get ID
+        ID = os.getpid()
+
+        # Getting the folder creation time
+        current_time = time.time()
+        time_str = SSHMirroredFilesystem._to_date(current_time)
+
+        # Filesystem check
+        SSHMirroredFilesystem._recreate_filesystem()
+
+        # New folder path
+        folder_path = os.path.join(SSHMirroredFilesystem.directory_path, f"{ID}_{time_str}") 
+        os.mkdir(folder_path)
+        
+        # Append the new name to the directory list
+        SSHMirroredFilesystem._append(folder_path)
+        return folder_path
+
     def _check_connection(self, process: subprocess.Popen) -> bool:
         """
         Checks if the ssh master connection was created (i.e. if the control socket file exists). If not, waits 100ms before checking again. Also looks if the 
@@ -269,12 +204,12 @@ class SSHMirroredFilesystem:
         if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
         remote_filepaths_str = ' '.join(remote_filepaths)
 
-        # Temporary folder check
-        self._recreate_filesystem()
+        # Creating a temporary sub directory
+        folder_path = self._sub_creation()
 
         # Bash command
         tar_creation_command = f'tar c{self.compression}f - --absolute-names {remote_filepaths_str}'
-        tar_extraction_command = f"tar x{self.compression}f - -C {SSHMirroredFilesystem.directory_path} --absolute-names --strip-components={strip_level}"
+        tar_extraction_command = f"tar x{self.compression}f - -C {folder_path} --absolute-names --strip-components={strip_level}"
         bash_command = f"ssh -S {self.ctrl_socket_filepath} {self.host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"  
 
         # OS check
@@ -289,7 +224,7 @@ class SSHMirroredFilesystem:
         # Local filepath setup 
         length = len(remote_filepaths)
         local_filepaths = [None] * length
-        for i in range(length): local_filepaths[i] = os.path.join(SSHMirroredFilesystem.directory_path, self._strip(remote_filepaths[i], strip_level))
+        for i in range(length): local_filepaths[i] = os.path.join(folder_path, self._strip(remote_filepaths[i], strip_level))
 
         if length == 1: return local_filepaths[0]
         return local_filepaths
@@ -343,12 +278,12 @@ class SSHMirroredFilesystem:
         if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
         remote_filepaths_str = ' '.join(remote_filepaths)
 
-        # Temporary folder check
-        SSHMirroredFilesystem._recreate_filesystem()
+        # Temporary sub folder creation
+        folder_path = SSHMirroredFilesystem._sub_creation()
 
         # Bash commands
         tar_creation_command = f'tar c{compression}f - --absolute-names {remote_filepaths_str}'
-        tar_extraction_command = f"tar x{compression}f - --strip-components={strip_level} --absolute-names -C {SSHMirroredFilesystem.directory_path}"
+        tar_extraction_command = f"tar x{compression}f - --strip-components={strip_level} --absolute-names -C {folder_path}"
         bash_command = f"ssh {host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"
 
         # OS check
@@ -363,19 +298,83 @@ class SSHMirroredFilesystem:
         # Local filepath setup 
         length = len(remote_filepaths)
         local_filepaths = [None] * length
-        for i in range(length): local_filepaths[i] = os.path.join(SSHMirroredFilesystem.directory_path, SSHMirroredFilesystem._strip(remote_filepaths[i], 1))
+        for i in range(length): local_filepaths[i] = os.path.join(folder_path, SSHMirroredFilesystem._strip(remote_filepaths[i], 1))
 
         if len(local_filepaths) == 1: return local_filepaths[0]
         return local_filepaths    
+    
+    @staticmethod
+    def _to_timestamp(date_str : str):
+
+        date_part, micro_part = date_str.rsplit(sep='_', maxsplit=1)
+        timestamp = time.mktime(time.strptime(date_part, '%Y%m%d_%H%M%S'))
+        microseconds = int(micro_part)
+        return timestamp + microseconds / 1e6
 
     @staticmethod
-    def cleanup(verbose: int = 0) -> None:
+    def _to_date(timestamp: float) -> str:
+
+        date_part = time.strftime('%Y%m%d_%H%M%S', time.localtime(int(timestamp)))
+        microseconds = int((timestamp % 1) * 1e6)
+        return f"{date_part}_{microseconds:06d}"
+    
+    @staticmethod
+    def _cleanup_choices(which: str):
+
+        directory_path = SSHMirroredFilesystem.directory_path
+        directories = os.listdir(directory_path)
+        dates = [name.split(sep='_', maxsplit=1)[1] for name in directories]
+
+
+        if 'ID' in which:
+            # Getting all the directories with the same ID
+            ID = str(os.getpid())  # TODO: maybe I need to also set a threading.get_ident(). But I might take away the 
+            #threads as there is no need to put this code inside a thread. 
+            rm_dir = [name for name in directories if ID in name]
+
+            if 'Closest' in which:
+                # Taking the time into account
+                current_time = time.time()
+
+                # Closest date before current_time
+                timestamps = [SSHMirroredFilesystem._to_timestamp(name.split(sep='_', maxsplit=1)[1]) for name in rm_dir]
+                closest = max([ts for ts in timestamps if ts < current_time])
+                closest_index = timestamps.index(closest)
+
+                # Corresponding directory
+                rm_dir = directories[closest_index]
+
+                    
+
+
+
+    @staticmethod
+    def cleanup(which: str = 'all', verbose: int = 0) -> None:
         """
         Used to clean up the temporary filesystem.
 
         Args:
             verbose (int, optional): if > 0 gives out a print when the temporary folder doesn't exist. Defaults to 0.
         """
+
+        options = ['all', 'latest', 'oldest', 'sameIDClosest', 'sameIDAll']
+
+        if which not in options: raise ValueError(f"\033[1;31mArgument 'which' cannot be '{which}'. Possible values are: {', '.join(options)}")
+
+        # If the directory exists
+        if os.path.exists(SSHMirroredFilesystem.directory_path):
+            
+            # Setup
+            if 'ID' in which: ID = os.getpid()
+            directory_path = SSHMirroredFilesystem.directory_path
+            directories = os.listdir(directory_path)
+
+            directories_info = [name.split(sep='_', maxsplit=1) for name in directories]
+
+
+
+
+
 
         if os.path.exists(SSHMirroredFilesystem.directory_path):
             shutil.rmtree(SSHMirroredFilesystem.directory_path)
@@ -410,4 +409,7 @@ class SSHMirroredFilesystem:
         To recreate the main temporary folder if it was already removed.
         """
 
-        if not os.path.exists(cls.directory_path): cls.directory_path = tempfile.mkdtemp()
+        if not os.path.exists(cls.directory_path): 
+            cls.directory_list = []
+            cls.directory_path = tempfile.mkdtemp()
+

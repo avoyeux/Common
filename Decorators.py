@@ -9,6 +9,9 @@ from time import time, ctime
 from typeguard import typechecked
 from typing import Type, Callable, TypeVar
 
+# PUBLIC API
+__all__ = ['ClassDecorator', 'Decorators']
+
 # General function and decorator types
 F = TypeVar('F', bound=Callable[..., any])
 D = Callable[[F], any]
@@ -103,7 +106,7 @@ class Decorators:
 
 class DecoratorsUtils:
     """
-    Stores functions that are used to help the added functionalities in this Decorators.py code file.
+    Stores private functions that are used to help the added functionalities in this Decorators.py code file.
     """
 
     @staticmethod

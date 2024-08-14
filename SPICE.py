@@ -80,15 +80,11 @@ class SpiceUtils:
             if verbose > 1: print(f"\033[37mCouldn't find the SPICE archive. Connecting to the server ...\033[0m", flush=flush)
 
             # Get file from the server
-            server = SSHMirroredFilesystem(verbose=3)
-            catalogue_filepath = server.mirror(catalogue_filepath)
-            # catalogue_filepath = SSHMirroredFilesystem.remote_to_local(catalogue_filepath)
+            catalogue_filepath = SSHMirroredFilesystem.remote_to_local(catalogue_filepath)
             df = pd.read_csv(catalogue_filepath, low_memory=False, na_values="MISSING", parse_dates=date_columns)
 
             # Cleanup temporary folder
-            server.close()
-            server.cleanup()
-            # SSHMirroredFilesystem.cleanup()
+            SSHMirroredFilesystem.cleanup(which='sameIDLatest')
 
         # Striping the useless spaces
         df.LEVEL = df.LEVEL.apply(lambda string: string.strip() if isinstance(string, str) else string)

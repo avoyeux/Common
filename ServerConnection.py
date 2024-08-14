@@ -13,38 +13,13 @@ import multiprocessing as mp
 
 
 
-# PUBLIC API
-__all__ = ['SSHMirroredFilesystem']
-
-
-
-class MirroredFilesystemHelper:
-    """
-    To help manage the filesystem for the SSHMirroredFilesystem class. It is therefore a private class.
-    """
-
-    def __init__(self):
-
-        # CONTEXT CHECK
-        self.is_multiprocessing = (os.getpid() != os.getppid())
-        self.is_threading = threading.current_thread().name != "MainThread"
-
-        # ATTRIBUTE SETUP
-        self.multi_lock = mp.Lock() if self.is_multiprocessing else None
-        self.thread_lock = threading.Lock() if self.is_threading else None
-
-        
-
-
-
-#TODO: important to later update this class. Problem being that if the class is used twice while only one cleanup is needed at a given time, then it cleanup everything by default...
 class SSHMirroredFilesystem:
     """
     To create a temporary filesystem that partially mirrors the server archive for the desired files. For Windows OS users, you need to have WSL installed for these
     methods to work.
 
      - The remote directory creation is set at class level, i.e. it is created as this python file is imported.
-     - The deletion of the filesystem has to be set manually using SSHMirroredFilesystem.cleanup().
+     - The deletion of the filesystem has to be set manually using SSHMirroredFilesystem.cleanup(). More precise options are possible when cleaning up.
 
      - If a single server connection is needed (i.e. cases where only one file or a single list of files need to be fetched), then using the staticmethod 
         .remote_to_local() is best.
@@ -113,45 +88,6 @@ class SSHMirroredFilesystem:
         else:
             process.terminate()
             raise TimeoutError(f'\033[1;31mServer SSH connection timeout after {self.timeout} seconds.\033[0m')
-        
-    @classmethod
-    def _append(cls, folder_path: str) -> None:
-        """
-        To append to the class level attribute list containing the temporary subfolders created. It does a preliminary
-        check to see if you are multiprocessing to decide if to use a lock. While initially, this also took into account if you are multithreading, now it doesn't as, after
-        further thinking, I don't see why anyone would use this code in a thread as the fetching is not really I/O bound but more dependent on the maximum Wi-Fi connection speed.
-        Furthermore, as the default is to to use compression when transferring files, it will be CPU bound before becoming I/O bound.
-
-        Args:
-            folder_path (str): path to the new created temporary sub folder.
-        """
-
-        is_multiprocessing = (os.getpid() != os.getppid())
-        if is_multiprocessing:
-            with cls.mp_lock: cls.directory_list.append(folder_path)
-        else:
-            cls.directory_list.append(folder_path)
-
-    @staticmethod
-    def _sub_creation() -> str:
-
-        # Get ID
-        ID = os.getpid()
-
-        # Getting the folder creation time
-        current_time = time.time()
-        time_str = SSHMirroredFilesystem._to_date(current_time)
-
-        # Filesystem check
-        SSHMirroredFilesystem._recreate_filesystem()
-
-        # New folder path
-        folder_path = os.path.join(SSHMirroredFilesystem.directory_path, f"{ID}_{time_str}") 
-        os.mkdir(folder_path)
-        
-        # Append the new name to the directory list
-        SSHMirroredFilesystem._append(folder_path)
-        return folder_path
 
     def _check_connection(self, process: subprocess.Popen) -> bool:
         """
@@ -204,7 +140,7 @@ class SSHMirroredFilesystem:
         if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
         remote_filepaths_str = ' '.join(remote_filepaths)
 
-        # Creating a temporary sub directory
+        # Creating a temporary subdirectory
         folder_path = self._sub_creation()
 
         # Bash command
@@ -283,7 +219,7 @@ class SSHMirroredFilesystem:
 
         # Bash commands
         tar_creation_command = f'tar c{compression}f - --absolute-names {remote_filepaths_str}'
-        tar_extraction_command = f"tar x{compression}f - --strip-components={strip_level} --absolute-names -C {folder_path}"
+        tar_extraction_command = f"tar x{compression}f - -C {folder_path} --absolute-names --strip-components={strip_level}"
         bash_command = f"ssh {host_shortcut} '{tar_creation_command}' | {tar_extraction_command}"
 
         # OS check
@@ -302,85 +238,169 @@ class SSHMirroredFilesystem:
 
         if len(local_filepaths) == 1: return local_filepaths[0]
         return local_filepaths    
-    
-    @staticmethod
-    def _to_timestamp(date_str : str):
-
-        date_part, micro_part = date_str.rsplit(sep='_', maxsplit=1)
-        timestamp = time.mktime(time.strptime(date_part, '%Y%m%d_%H%M%S'))
-        microseconds = int(micro_part)
-        return timestamp + microseconds / 1e6
-
-    @staticmethod
-    def _to_date(timestamp: float) -> str:
-
-        date_part = time.strftime('%Y%m%d_%H%M%S', time.localtime(int(timestamp)))
-        microseconds = int((timestamp % 1) * 1e6)
-        return f"{date_part}_{microseconds:06d}"
-    
-    @staticmethod
-    def _cleanup_choices(which: str):
-
-        directory_path = SSHMirroredFilesystem.directory_path
-        directories = os.listdir(directory_path)
-        dates = [name.split(sep='_', maxsplit=1)[1] for name in directories]
-
-
-        if 'ID' in which:
-            # Getting all the directories with the same ID
-            ID = str(os.getpid())  # TODO: maybe I need to also set a threading.get_ident(). But I might take away the 
-            #threads as there is no need to put this code inside a thread. 
-            rm_dir = [name for name in directories if ID in name]
-
-            if 'Closest' in which:
-                # Taking the time into account
-                current_time = time.time()
-
-                # Closest date before current_time
-                timestamps = [SSHMirroredFilesystem._to_timestamp(name.split(sep='_', maxsplit=1)[1]) for name in rm_dir]
-                closest = max([ts for ts in timestamps if ts < current_time])
-                closest_index = timestamps.index(closest)
-
-                # Corresponding directory
-                rm_dir = directories[closest_index]
-
-                    
-
-
-
+  
     @staticmethod
     def cleanup(which: str = 'all', verbose: int = 0) -> None:
         """
         Used to clean up the temporary filesystem.
 
         Args:
-            verbose (int, optional): if > 0 gives out a print when the temporary folder doesn't exist. Defaults to 0.
+            which (str, optional): defines the choice made on which temporary folder to cleanup. The different options are:
+                - 'all': remove the main temporary filesystem, i.e. all the files that were saved to the local from the remote.
+                - 'latest': remove only the latest subdirectory that was created. 
+                - 'oldest': remove only the oldest subdirectory that was created.
+                - 'sameIDAll': remove all the subdirectories with the same os.getpid() than the current process.
+                - 'sameIDLatest': remove only the latest subdirectory with the same os.getpid() than the current process.
+                - 'sameIDOldest': remove only the oldest subdirectory with the same os.getpid() than the current process.
+                Defaults to 'all'.
+            verbose (int, optional): if > 0, then some information prints are created. Defaults to 0.
         """
 
-        options = ['all', 'latest', 'oldest', 'sameIDClosest', 'sameIDAll']
-
+        # OPTION CHECK
+        options = ['all', 'latest', 'oldest', 'sameIDAll', 'sameIDLatest', 'sameIDOldest']
         if which not in options: raise ValueError(f"\033[1;31mArgument 'which' cannot be '{which}'. Possible values are: {', '.join(options)}")
 
         # If the directory exists
-        if os.path.exists(SSHMirroredFilesystem.directory_path):
+        directory_path = SSHMirroredFilesystem.directory_path
+        if os.path.exists(directory_path):
             
-            # Setup
-            if 'ID' in which: ID = os.getpid()
-            directory_path = SSHMirroredFilesystem.directory_path
+            # Getting the directories to choose from
             directories = os.listdir(directory_path)
 
-            directories_info = [name.split(sep='_', maxsplit=1) for name in directories]
+            # Get same ID directories
+            if 'ID' in which:
+                ID = str(os.getpid())
+                directories = [name for name in directories if ID in name]
 
+            # Get latest, i.e. highest date, repository
+            if 'latest' in which.lower():
+                timestamps = [SSHMirroredFilesystem._to_timestamp(name.split(sep='_', maxsplit=1)[1]) for name in directories]
+                latest_index = timestamps.index(max(timestamps))
 
+                # Corresponding directory
+                directories = [directories[latest_index]]
 
+            # Get oldest, i.e. smallest timestamp, repository
+            elif 'oldest' in which.lower():
+                timestamps = [SSHMirroredFilesystem._to_timestamp(name.split(sep='_', maxsplit=1)[1]) for name in directories]
+                oldest_index = timestamps.index(min(timestamps))
 
+                # Corresponding directory
+                directories = [directories[oldest_index]]
 
+            # If 'all' in which.lower()
+            else:
+                directories = None
+            
+            if not isinstance(directories, list):
+                # Remove all
+                shutil.rmtree(directory_path) 
+                SSHMirroredFilesystem._pop()  
 
-        if os.path.exists(SSHMirroredFilesystem.directory_path):
-            shutil.rmtree(SSHMirroredFilesystem.directory_path)
-            if verbose > 0: print(f"\033[37mcleanup: temporary filesystem {SSHMirroredFilesystem.directory_path} removed.\033[0m")
+                if verbose > 0: print(f"\033[37mcleanup: temporary filesystem {directory_path} removed.\033[0m")
+            else:
+                # Remove the directories list
+                for directory in directories: shutil.rmtree(os.path.join(directory_path, directory))
+                SSHMirroredFilesystem._pop(directories)
+
+                if verbose > 0: print(f"\033[37mcleanup: temporary subfolder(s) {', '.join(directories)} removed from folder {directory_path}.\033[0m")
+
         elif verbose > 0:
-            print(f"\033[37mcleanup: temporary filesystem {SSHMirroredFilesystem.directory_path} already removed.\033[0m")
+            print(f"\033[37mcleanup: temporary filesystem {directory_path} already removed.\033[0m")
+
+    @staticmethod
+    def _sub_creation() -> str:
+        """
+        To create a new temporary subfolder. The subfolder name depends on os.getpid() and the creation date.
+
+        Returns:
+            str: the fullpath for the new created temporary sub folder.
+        """
+
+        # Filesystem check
+        SSHMirroredFilesystem._recreate_filesystem()
+
+        # Get ID
+        ID = os.getpid()
+
+        # Getting the folder creation time
+        current_time = time.time()
+        time_str = SSHMirroredFilesystem._to_date(current_time)
+
+        # New folder creation
+        foldername = f"{ID}_{time_str}"
+        folder_path = os.path.join(SSHMirroredFilesystem.directory_path, foldername) 
+        os.mkdir(folder_path)
+        
+        # Append the new name to the directory list
+        SSHMirroredFilesystem._append(foldername)
+        return folder_path
+   
+    @staticmethod
+    def _to_date(timestamp: float) -> str:
+        """
+        To format a timestamp in seconds to a date_str with the format '%Y%m%d_%H%M%S_miS' with miS being microseconds.
+
+        Args:
+            timestamp (float): the timestamp in seconds with microsecond precision.
+
+        Returns:
+            str: the corresponding date string in the format '%Y%m%d_%H%M%S_miS' with miS being microseconds.
+        """
+
+        date_part = time.strftime('%Y%m%d_%H%M%S', time.localtime(int(timestamp)))
+        microseconds = int((timestamp % 1) * 1e6)
+        return f"{date_part}_{microseconds:06d}"
+    
+    @staticmethod
+    def _to_timestamp(date_str : str) -> float:
+        """
+        To convert a date string to a float in seconds.
+
+        Args:
+            date_str (str): the formatted date string.
+
+        Returns:
+            float: the corresponding time in seconds (with microseconds precision)
+        """
+        
+
+        date_part, micro_part = date_str.rsplit(sep='_', maxsplit=1)
+        timestamp = time.mktime(time.strptime(date_part, '%Y%m%d_%H%M%S'))
+        microseconds = int(micro_part)
+        return timestamp + microseconds / 1e6
+
+    @classmethod
+    def _append(cls, foldername: str) -> None:
+        """
+        To append to the class level attribute list containing the temporary subfolders created. It does a preliminary check to see if you are multiprocessing to decide if to use a lock. 
+        While initially, this also took into account if you are multithreading, now it doesn't as, after further thinking, I don't see why anyone would use this code in a thread as the 
+        fetching is not really I/O bound but more dependent on the maximum Wi-Fi connection speed. Furthermore, as the default is to to use compression when transferring files, 
+        it will be CPU bound before becoming I/O bound.
+
+        Args:
+            foldername (str):  name of the newly created temporary subfolder.
+        """
+
+        is_multiprocessing = (os.getpid() != os.getppid())
+        if is_multiprocessing:
+            with cls.mp_lock: cls.directory_list.append(foldername)
+        else:
+            cls.directory_list.append(foldername)
+    
+    @classmethod
+    def _pop(cls, directories : list[str] = []) -> None:
+        """
+        To take away, from the class level directory list, the directory names that where deleted.
+
+        Args:
+            directories (list[str], optional): the directory names to take away from the list. Defaults to [] (empties the list completely).
+        """
+        
+        if directories == []:
+            cls.directory_list = []
+        else:
+            cls.directory_list = [name for name in cls.directory_list if name not in directories]
 
     @staticmethod
     def _strip(fullpath: str, strip_level: int) -> str:
@@ -412,4 +432,3 @@ class SSHMirroredFilesystem:
         if not os.path.exists(cls.directory_path): 
             cls.directory_list = []
             cls.directory_path = tempfile.mkdtemp()
-

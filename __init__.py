@@ -1,4 +1,5 @@
-"""Stores a multitude of functions that can be used in multiple repositories, hence the 'Common' name.
+"""
+Stores a multitude of functions that can be used in multiple repositories, hence the 'Common' name.
 There are functions related to the re, matplotlib and multiprocessing libraries. Furthermore there are also utility functions for SPICE, STEREO, server connection
 and general array manipulation functions.
 Lastly, there is also some created useful decorators.

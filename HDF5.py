@@ -6,6 +6,7 @@ To help when using the HDF5 format. Initial created to have a similar option tha
 # IMPORTS
 import os
 import h5py
+import shutil
 
 from typing import Self  # used to type annotate an instance of a class
 
@@ -71,7 +72,7 @@ class HDF5Handler:
             h5File = h5py.File(filepath, 'r')
 
             # Cleaning up if the file was fetched
-            SSHMirroredFilesystem.cleanup(verbose)
+            SSHMirroredFilesystem.cleanup(verbose=verbose)
         except Exception as e:
             raise Exception(f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file. Error: {e}\033[0m")
      
@@ -86,38 +87,42 @@ class HDF5Handler:
 
         self.file.close()
 
-    def info(self, level: int = 10) -> Self:
+    def info(self, level: int = 10, indentation: str = " " * 2) -> Self:
         """
         To print the general metadata and data information on the HDF5 file. Had the inspiration from the .info() method from astropy.io.fits
 
         Args:
             level (int, optional): decides the level of the information. 0 only gives the information on the main Datasets and Groups. 1 goes one level further
                 down the hierarchy and etc. Defaults to 10.
+            indentation (str, optional): sets the indentation added every time you go down a level in the file hierarchy. Defaults to "  ". 
 
         Returns:
             Self: returns the instance to allow for chaining if needed.
         """
 
-        # Main metadata setup
+        # Setting the max string length for visualisation
+        width = shutil.get_terminal_size().columns
+        description = self.file.attrs.get('description', 'No description').split('\n')
+        description = [section[i:i + width].strip() for section in description for i in range(0, len(section), width)]
+
         info = [
-            "\n" + "=" * 90,
+            "\n" + "=" * width,
             f"\033[1m\nHDF5 file {self.filename} information.\033[0m",
-            f"filename: {self.file.attrs.get('filename', 'No filename')}",
-            f"creationDate: {self.file.attrs.get('creationDate', 'No creation date')}",
-            f"author: {self.file.attrs.get('author', 'No author')}",
-            f"description: {self.file.attrs.get('description', 'No description')}",
-            "\n" + "=" * 90 + "\n",
-        ] 
+            f"\033[92mfilename:\033[0m {self.file.attrs.get('filename', 'No filename')}",
+            f"\033[92mcreationDate:\033[0m {self.file.attrs.get('creationDate', 'No creation date')}",
+            f"\033[92mauthor:\033[0m {self.file.attrs.get('author', 'No author')}",
+            "\033[92mdescription:\033[0m",
+        ] + description + ["\n" + "=" * width + "\n"]
 
         # Exploring the file
-        info_extension = self._explore(self.file, level, level)
+        info_extension = self._explore(self.file, level, level, width, indentation)
 
         # Print creation
         info_list = info + info_extension
         print("\n".join(info_list), flush=self.flush)
         return self 
     
-    def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
+    def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int, width: int, indentation: str) -> list[str]:
         """
         Private instance method to explore a given h5py.File or h5py.Group. Returns the information in a list of strings.
 
@@ -125,15 +130,18 @@ class HDF5Handler:
             group (h5py.File | h5py.Group): the HDF5 file or one of it's given groups to explore.
             max_level (int): the initial level chosen for the 'level' argument of info(). 
             level (int): the level where we are. Starts from max_level to 0.
+            width (int): the width of the terminal at runtime.
+            indentation (str): sets the indentation added every time you go down a level in the file hierarchy.
 
         Returns:
             list[str]: file or group information.
         """
 
         # Level set up
+        rank = max_level - level
+
+        # Updating the level
         level -= 1
-        rank = max_level - level 
-        indentation = " " * 4
 
         # Exploration setup
         nb_groups = 0
@@ -144,25 +152,30 @@ class HDF5Handler:
         # Exploring
         for key, item in group.items():
 
+            # Setting up the description for proper visualisation
+            ind = len(indentation)
+            description = item.attrs.get('description', 'No description').split('\n')
+            description = [section[i:i + (width - ind * rank)].strip() for section in description for i in range(0, len(section), width - ind * rank)]
+
             # Checking the type
             if isinstance(item, h5py.Dataset):
                 info_datasets.extend([
-                    f"Dataset {nb_datasets}: {key}  (shape: {item.shape}, dtype: '{item.dtype}')",
-                    indentation + f"description: {item.attrs.get('description', 'No description')}",
-                ])
+                    f"\033[1;94mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')",
+                    "\033[92mdescription:\033[0m",
+                ] + description)
                 nb_datasets += 1
 
             elif isinstance(item, h5py.Group):
                 info_groups.extend([
-                    f"Group {nb_groups}: {key} (member name(s): {', '.join(item.keys())})",
-                    indentation + f"description: {item.attrs.get('description', 'No description')}",
-                ])
+                    f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)",
+                    "\033[92mdescription:\033[0m",
+                ] + description)
                 nb_groups += 1
 
                 # Deeper
-                if level > -1: info_groups.extend(self._explore(item, max_level, level))
+                if level > -1: info_groups.extend(self._explore(item, max_level, level, width, indentation))
         
-        group_info = [f"\033[1mlvl{rank - 1}: {nb_datasets} dataset(s) and {nb_groups} group(s)\033[0m"]
-        print_list = group_info + info_datasets + info_groups + ["-" * 70]
-        print_list = [indentation + value for value in print_list]
+        group_info = [f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]
+        print_list = group_info + info_datasets + info_groups + ["-" * (width - len(indentation) * rank)]
+        if rank != 0: print_list = [indentation + value for value in print_list]
         return print_list

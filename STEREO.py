@@ -68,7 +68,7 @@ class StereoUtils:
 
         if filter_compressed_data: df = df[df['dest'] != 'SW']  # not using the compressed data
 
-        SSHMirroredFilesystem.cleanup()  # removing temporary folder if created
+        SSHMirroredFilesystem.cleanup('sameIDLatest')  # removing temporary folder if created
         return df.reset_index(drop=True)
 
     @staticmethod

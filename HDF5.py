@@ -20,6 +20,9 @@ class HDF5Handler:
     Main added functionality is the .info() which gives the information of a given HDF5 file (kind of similar to .info() from astropy.io.fits).
     """
 
+    main_default_keys = ['filename', 'creationDate', 'author', 'description']
+    sub_default_keys = ['description', 'unit']
+
     def __init__(self, filename: str, HDF5File: h5py.File, verbose: int, flush: bool) -> None:
         """
         To add functionalities when opening an HDF5 file (i.e. .h5 files).
@@ -35,9 +38,15 @@ class HDF5Handler:
                 called (usually not the case when multiprocessing).
         """
         
-        # Non-optional attributes
+        # Non-optional instance attributes
         self.filename = filename
         self.file = HDF5File
+
+        # Attributes created at runtime
+        self.max_width: int
+        self.all_info: bool
+        self.indentation: str
+        self.len_indentation: int
         
         # Miscellaneous attributes
         self.verbose = verbose
@@ -87,42 +96,82 @@ class HDF5Handler:
 
         self.file.close()
 
-    def info(self, level: int = 10, indentation: str = " " * 2) -> Self:
+    def info(self, level: int = 10, indentation: str = " " * 2, all_info: bool = True) -> Self:
         """
         To print the general metadata and data information on the HDF5 file. Had the inspiration from the .info() method from astropy.io.fits
 
         Args:
-            level (int, optional): decides the level of the information. 0 only gives the information on the main Datasets and Groups. 1 goes one level further
-                down the hierarchy and etc. Defaults to 10.
+            level (int, optional): decides the max level of the information to be printed out. 
+                If 0 only gives the information on the main Datasets and Groups. 1 goes one level further down the hierarchy and vice versa. Defaults to 10.
             indentation (str, optional): sets the indentation added every time you go down a level in the file hierarchy. Defaults to "  ". 
+            all_info (bool, optional): choosing to print all the attributes. If False, only the default attributes given by the two class level attributes are 
+                printed out. Defaults to True.
 
         Returns:
             Self: returns the instance to allow for chaining if needed.
         """
 
-        # Setting the max string length for visualisation
-        width = shutil.get_terminal_size().columns
-        description = self.file.attrs.get('description', 'No description').split('\n')
-        description = [section[i:i + width].strip() for section in description for i in range(0, len(section), width)]
+        # Get terminal width
+        max_width = shutil.get_terminal_size().columns
+
+        # Setting some instance attributes
+        self.max_width = max_width
+        self.all_info = all_info
+        self.indentation = indentation
+        self.len_indentation = len(indentation)
 
         info = [
-            "\n" + "=" * width,
-            f"\033[1m\nHDF5 file {self.filename} information.\033[0m",
-            f"\033[92mfilename:\033[0m {self.file.attrs.get('filename', 'No filename')}",
-            f"\033[92mcreationDate:\033[0m {self.file.attrs.get('creationDate', 'No creation date')}",
-            f"\033[92mauthor:\033[0m {self.file.attrs.get('author', 'No author')}",
-            "\033[92mdescription:\033[0m",
-        ] + description + ["\n" + "=" * width + "\n"]
+            "\n" + "=" * max_width,
+            f"\033[1m\nHDF5 file '{self.filename}' information.\n\033[0m",
+        ] + [
+            string
+            for key in HDF5Handler.main_default_keys
+            for string in self._reformat_string(self.file.attrs.get(key, f'No {key}'), key, 0)
+        ]
+
+        if all_info:
+            info += [
+                string 
+                for key in self.file.attrs.keys()
+                if key not in HDF5Handler.main_default_keys
+                for string in self._reformat_string(self.file.attrs[key], key, 0)
+            ]
+        
+        info += ["\n" + "=" * max_width + "\n"]            
 
         # Exploring the file
-        info_extension = self._explore(self.file, level, level, width, indentation)
+        info_extension = self._explore(self.file, level, level)
 
         # Print creation
         info_list = info + info_extension
         print("\n".join(info_list), flush=self.flush)
         return self 
     
-    def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int, width: int, indentation: str) -> list[str]:
+    def _reformat_string(self, init_string: str, keyname: str, rank: int) -> list[str]:
+        """
+        To reformat a given string so that you can set a maximum length for each string line (i.e. before each linebreak). 
+        Furthermore, the key name and the rank (representing how far down the print is down the file hierarchy) for the string should be given.
+
+        Args:
+            init_string (str): the initial string to be reformatted. The string doesn't include the key name at the beginning of said string.
+            keyname (str): the keyname of the string to be reformatted.
+            rank (int): the file hierarchy rank for the string to be reformatted.
+
+        Returns:
+            list[str]: the new reformatted string as a list[str] where each string represents a line (i.e. there is a linebreak after each given string.)
+        """
+
+        string = (len(keyname) + 2) * ' ' + init_string  # placeholder for f'{keyname}: '
+
+        description = [
+            init_string[i:i + (self.max_width - self.len_indentation * rank)].strip()
+            for section in string.split('\n')  # keeping the desired linebreaks
+            for i in range(0, len(section), self.max_width - self.len_indentation * rank)
+        ]
+        description[0] = f"\033[92m{keyname}:\033[0m " + description[0]  # add keyname now to set the keyname color
+        return description
+    
+    def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
         Private instance method to explore a given h5py.File or h5py.Group. Returns the information in a list of strings.
 
@@ -130,8 +179,6 @@ class HDF5Handler:
             group (h5py.File | h5py.Group): the HDF5 file or one of it's given groups to explore.
             max_level (int): the initial level chosen for the 'level' argument of info(). 
             level (int): the level where we are. Starts from max_level to 0.
-            width (int): the width of the terminal at runtime.
-            indentation (str): sets the indentation added every time you go down a level in the file hierarchy.
 
         Returns:
             list[str]: file or group information.
@@ -152,30 +199,37 @@ class HDF5Handler:
         # Exploring
         for key, item in group.items():
 
-            # Setting up the description for proper visualisation
-            ind = len(indentation)
-            description = item.attrs.get('description', 'No description').split('\n')
-            description = [section[i:i + (width - ind * rank)].strip() for section in description for i in range(0, len(section), width - ind * rank)]
+            # Information setup
+            item_info = [
+                string 
+                for key in HDF5Handler.sub_default_keys
+                for string in self._reformat_string(item.attrs.get(key, f'No {key}'), key, rank)
+            ]
+            if self.all_info:
+                item_info += [
+                    string
+                    for key in item.attrs.keys()
+                    if key not in self.sub_default_keys
+                    for string in self._reformat_string(item.attrs[key], key, rank)
+                ]
 
             # Checking the type
             if isinstance(item, h5py.Dataset):
                 info_datasets.extend([
-                    f"\033[1;94mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')",
-                    "\033[92mdescription:\033[0m",
-                ] + description)
+                    f"\033[1;94mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')"
+                ] + item_info)
                 nb_datasets += 1
 
             elif isinstance(item, h5py.Group):
                 info_groups.extend([
-                    f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)",
-                    "\033[92mdescription:\033[0m",
-                ] + description)
+                    f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)"
+                ] + item_info)
                 nb_groups += 1
 
                 # Deeper
-                if level > -1: info_groups.extend(self._explore(item, max_level, level, width, indentation))
+                if level > -1: info_groups.extend(self._explore(item, max_level, level))
         
         group_info = [f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]
-        print_list = group_info + info_datasets + info_groups + ["-" * (width - len(indentation) * rank)]
-        if rank != 0: print_list = [indentation + value for value in print_list]
+        print_list = group_info + info_datasets + info_groups + ["-" * (self.max_width - self.len_indentation * rank)]
+        if rank != 0: print_list = [self.indentation + value for value in print_list]
         return print_list

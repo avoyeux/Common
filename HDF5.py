@@ -21,7 +21,7 @@ class HDF5Handler:
     """
 
     main_default_keys = ['filename', 'creationDate', 'author', 'description']
-    sub_default_keys = ['description', 'unit']
+    sub_default_keys = ['unit', 'description']
 
     def __init__(self, filename: str, HDF5File: h5py.File, verbose: int, flush: bool) -> None:
         """
@@ -120,9 +120,14 @@ class HDF5Handler:
         self.indentation = indentation
         self.len_indentation = len(indentation)
 
+        # Title centering
+        title = f"HDF5 file '{self.filename}' information"
+        title_indentation_len = (max_width // 2) - (len(title) // 2) 
+        title_indentation = title_indentation_len * ' ' if title_indentation_len > 0 else ''
+
         info = [
-            "\n" + "=" * max_width,
-            f"\033[1m\nHDF5 file '{self.filename}' information.\n\033[0m",
+            "\n" + "=" * max_width + "\n",
+            title_indentation + f"\033[1m{title}\n\033[0m",
         ] + [
             string
             for key in HDF5Handler.main_default_keys
@@ -164,13 +169,13 @@ class HDF5Handler:
         string = (len(keyname) + 2) * ' ' + init_string  # placeholder for f'{keyname}: '
 
         description = [
-            init_string[i:i + (self.max_width - self.len_indentation * rank)].strip()
+            section[i:i + (self.max_width - self.len_indentation * rank)].strip()
             for section in string.split('\n')  # keeping the desired linebreaks
             for i in range(0, len(section), self.max_width - self.len_indentation * rank)
         ]
         description[0] = f"\033[92m{keyname}:\033[0m " + description[0]  # add keyname now to set the keyname color
         return description
-    
+
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
         Private instance method to explore a given h5py.File or h5py.Group. Returns the information in a list of strings.

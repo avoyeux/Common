@@ -14,13 +14,13 @@ class MultiProcessing:
     """
 
     @staticmethod
-    def pool_indexes(data_length: int, nb_processes: int = 4) -> list[tuple[int, int]]:
+    def pool_indexes(data_length: int, nb_processes: int) -> list[tuple[int, int]]:
         """
         Gives out a list of tuples with the start and last data index for each process.
 
         Args:
             data_length (int): the length of the data that you want to multiprocess.
-            nb_processes (int, optional: the number or processes you want to run. If higher than data_length then it becomes data_length. Defaults to 4.
+            nb_processes (int): the number or processes you want to run. If higher than data_length then data_length is used.
 
         Returns:
             list[tuple[int, int]]: the list of the start and end indexes for each process.
@@ -51,11 +51,11 @@ class MultiProcessing:
         # Initialisations
         shm = SharedMemory(create=True, size=data.nbytes)
         info = {
-            'shm.name': shm.name,
-            'data.shape': data.shape,
-            'data.dtype': data.dtype,
+            'name': shm.name,
+            'shape': data.shape,
+            'dtype': data.dtype,
         }
-        shared_array = np.ndarray(info['data.shape'], dtype=info['data.dtype'], buffer=shm.buf)
+        shared_array = np.ndarray(info['shape'], dtype=info['dtype'], buffer=shm.buf)
         np.copyto(shared_array, data)
         shm.close()
         return shm, info

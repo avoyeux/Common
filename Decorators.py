@@ -184,8 +184,8 @@ class DecoratorsUtils:
         """
 
         minutes, seconds = divmod(seconds, 60)
-        hours, minutes = divmod(minutes, 60)
-        days, hours = divmod(hours, 24)
+        hours, minutes = map(int, divmod(minutes, 60))
+        days, hours = map(int, divmod(hours, 24))
 
         if minutes == 0:
             return f'{round(seconds, 2)}s'

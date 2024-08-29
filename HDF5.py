@@ -96,7 +96,7 @@ class HDF5Handler:
 
         self.file.close()
 
-    def info(self, level: int = 10, indentation: str = " " * 2, all_info: bool = True) -> Self:
+    def info(self, level: int = 10, indentation: str = "| ", all_info: bool = True) -> Self:
         """
         To print the general metadata and data information on the HDF5 file. Had the inspiration from the .info() method from astropy.io.fits
 

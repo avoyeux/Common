@@ -5,6 +5,7 @@ To help when using the HDF5 format. Initial created to have a similar option tha
 
 # IMPORTS
 import os
+import re
 import h5py
 import shutil
 
@@ -43,6 +44,8 @@ class HDF5Handler:
         self.file = HDF5File
 
         # Attributes created at runtime
+        self.ansi_escape_pattern = re.compile(r'(\033\[[0-9;]*m)')
+        # Placeholders 
         self.max_width: int
         self.all_info: bool
         self.indentation: str
@@ -81,7 +84,7 @@ class HDF5Handler:
             h5File = h5py.File(filepath, 'r')
 
             # Cleaning up if the file was fetched
-            SSHMirroredFilesystem.cleanup(verbose=verbose)
+            SSHMirroredFilesystem.cleanup(verbose=verbose)  # TODO: need to change this as I shouldn't remove the file yet.
         except Exception as e:
             raise Exception(f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file. Error: {e}\033[0m")
      
@@ -131,7 +134,7 @@ class HDF5Handler:
         ] + [
             string
             for key in HDF5Handler.main_default_keys
-            for string in self._reformat_string(self.file.attrs.get(key, f'No {key}'), key, 0)
+            for string in self._reformat_string(self.file.attrs.get(key, f'No {key}'), f"\033[92m{key}\033[0m ", 0)
         ]
 
         if all_info:
@@ -139,7 +142,7 @@ class HDF5Handler:
                 string 
                 for key in self.file.attrs.keys()
                 if key not in HDF5Handler.main_default_keys
-                for string in self._reformat_string(self.file.attrs[key], key, 0)
+                for string in self._reformat_string(self.file.attrs[key], f"\033[92m{key}\033[0m ", 0)
             ]
         
         info += ["\n" + "=" * max_width + "\n"]            
@@ -152,29 +155,104 @@ class HDF5Handler:
         print("\n".join(info_list), flush=self.flush)
         return self 
     
-    def _reformat_string(self, init_string: str, keyname: str, rank: int) -> list[str]:
+    def _reformat_string(self, string: str, string_before: str = '', rank: int = 0, string_ansi: bool = False) -> list[str]:
         """
         To reformat a given string so that you can set a maximum length for each string line (i.e. before each linebreak). 
         Furthermore, the key name and the rank (representing how far down the print is down the file hierarchy) for the string should be given.
 
         Args:
             init_string (str): the initial string to be reformatted. The string doesn't include the key name at the beginning of said string.
-            keyname (str): the keyname of the string to be reformatted.
+            string_begin (str): the ANSI formatted string before 'init_string'. Needed so that the ANSI string length is not taken into account
+                in the print as it shouldn't show in most terminals.
             rank (int): the file hierarchy rank for the string to be reformatted.
 
         Returns:
             list[str]: the new reformatted string as a list[str] where each string represents a line (i.e. there is a linebreak after each given string.)
         """
 
-        string = (len(keyname) + 2) * ' ' + init_string  # placeholder for f'{keyname}: '
+        # Placeholder for ansi beginning string
+        without_ansi = re.sub(self.ansi_escape_pattern, '', string_before)
+        string = len(without_ansi) * ' ' + string 
+        max_string_len = self.max_width - self.len_indentation * rank
 
+        # Create string
         description = [
-            section[i:i + (self.max_width - self.len_indentation * rank)].strip()
+            section[i:i + max_string_len].strip()
             for section in string.split('\n')  # keeping the desired linebreaks
-            for i in range(0, len(section), self.max_width - self.len_indentation * rank)
+            for i in range(0, len(section), max_string_len)
         ]
-        description[0] = f"\033[92m{keyname}:\033[0m " + description[0]  # add keyname now to set the keyname color
+        description[0] = string_before + description[0]  # add the initial ANSI characters
         return description
+
+    def brouillon(self, str_input: str, max_len: int) -> list[str]:
+        # TODO: draft for the string reformatting
+
+        segments = []
+        for section in str_input.split('\n'):
+            current_segment = []
+            current_len = 0
+
+            for piece in self.ansi_escape_pattern.split(section):
+                if self.ansi_escape_pattern.match(piece):
+                    current_segment.append(piece)
+                else:
+                    while len(piece) > 0:
+                        space_left = max_len - current_len
+
+                        if len(piece) <= space_left:
+                            current_segment.append(piece)
+                            current_len += len(piece)
+                            piece = ''
+                        else:
+                            current_segment.append(piece[:space_left])
+                            segments.append(''.join(current_segment))
+                            piece = piece[space_left:]
+                            current_segment = []
+                            current_len = 0
+
+
+
+    def reformat_testing(self, input_string: str, max_length: int) -> list[str]:
+        # TODO: just testing the new method to improve on it
+
+        # Pattern to find ANSI escape sequences
+        ansi_pattern = re.compile(r'(\x1b\[[0-9;]*m)')
+
+        # Split the string into segments that include ANSI sequences
+        pieces = ansi_pattern.split(input_string)  # Keeps the ANSI
+        segments = []
+        current_length = 0
+        current_segment = []
+
+        for piece in pieces:
+            if ansi_pattern.match(piece):
+                # If the piece is an ANSI sequence, add it to the current segment
+                current_segment.append(piece)
+            else:
+                # Process non-ANSI piece
+                while len(piece) > 0:
+                    # Calculate available space in the current segment
+                    space_left = max_length - current_length
+
+                    # If the piece fits into the current segment, add it, otherwise split
+                    if len(piece) <= space_left:
+                        current_segment.append(piece)
+                        current_length += len(piece)
+                        piece = ''
+                    else:
+                        # Add what can fit and start a new segment
+                        current_segment.append(piece[:space_left])
+                        segments.append(''.join(current_segment))
+                        piece = piece[space_left:]
+                        current_segment = []
+                        current_length = 0
+
+        # Add the last segment if any remains
+        if current_segment or current_length > 0:
+            segments.append(''.join(current_segment))
+
+        return segments
+
 
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
@@ -208,30 +286,39 @@ class HDF5Handler:
             item_info = [
                 string 
                 for key in HDF5Handler.sub_default_keys
-                for string in self._reformat_string(item.attrs.get(key, f'No {key}'), key, rank)
+                for string in self._reformat_string(item.attrs.get(key, f'No {key}'), f"\033[92m{key}\033[0m ", rank)
             ]
             if self.all_info:
                 item_info += [
                     string
                     for key in item.attrs.keys()
                     if key not in self.sub_default_keys
-                    for string in self._reformat_string(item.attrs[key], key, rank)
+                    for string in self._reformat_string(item.attrs[key], f"\033[92m{key}\033[0m ", rank)
                 ]
-
+            
             # Checking the type
             if isinstance(item, h5py.Dataset):
-                info_datasets.extend([
-                    f"\033[1;94mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')"
-                ] + item_info)
+                string_beginning = f"\033[1;94mDataset {nb_datasets}: \033[97m"
+                info_datasets.extend(
+                    self._reformat_string(
+                        f"(shape: {item.shape}, dtype: '{item.dtype}')",
+                        f"\033[1;94mDataset {nb_datasets}: \033[97m{key}\033[0m ",
+                        0
+                    ) + item_info
+                )
                 nb_datasets += 1
-
+            
             elif isinstance(item, h5py.Group):
-                info_groups.extend([
-                    f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)"
-                ] + item_info)
+                info_groups.extend(
+                    self._reformat_string(
+                        f"(member name(s): \033[1m{', '.join(item.keys())}\033[0m)",  #TODO: this is wrong, need to change it
+                        f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m ",
+                        0
+                    ) + item_info
+                )
                 nb_groups += 1
 
-                # Deeper
+                # DEEPER 
                 if level > -1: info_groups.extend(self._explore(item, max_level, level))
         
         group_info = [f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]

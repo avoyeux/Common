@@ -14,7 +14,10 @@ from typing import Self  # used to type annotate an instance of a class
 # Personal imports
 from .ServerConnection import SSHMirroredFilesystem
 
+from typeguard import typechecked 
+from .Decorators import ClassDecorator, Decorators
 
+# @ClassDecorator(decorator=Decorators.running_time)
 class HDF5Handler:
     """
     To add functionalities when opening an HDF5 file (i.e. .h5 files).
@@ -134,7 +137,7 @@ class HDF5Handler:
         ] + [
             string
             for key in HDF5Handler.main_default_keys
-            for string in self._reformat_string(self.file.attrs.get(key, f'No {key}'), f"\033[92m{key}\033[0m ", 0)
+            for string in self._reformat_string(self.file.attrs.get(key, f'No {key}'), f"\033[92m{key}:\033[0m ")
         ]
 
         if all_info:
@@ -142,7 +145,7 @@ class HDF5Handler:
                 string 
                 for key in self.file.attrs.keys()
                 if key not in HDF5Handler.main_default_keys
-                for string in self._reformat_string(self.file.attrs[key], f"\033[92m{key}\033[0m ", 0)
+                for string in self._reformat_string(self.file.attrs[key], f"\033[92m{key}:\033[0m ")
             ]
         
         info += ["\n" + "=" * max_width + "\n"]            
@@ -154,63 +157,69 @@ class HDF5Handler:
         info_list = info + info_extension
         print("\n".join(info_list), flush=self.flush)
         return self 
-    
-    def _reformat_string(self, string: str, string_before: str = '', rank: int = 0, string_ansi: bool = False) -> list[str]:
+
+    def _reformat_string(self, string: str, title: str = '', rank: int = 0, ansi_all: bool = False) -> list[str]:
         """
-        To reformat a given string so that you can set a maximum length for each string line (i.e. before each linebreak). 
-        Furthermore, the key name and the rank (representing how far down the print is down the file hierarchy) for the string should be given.
+        To reformat a given string so that you can set a maximum length for each string line (i.e. before each linebreak).
+        You can also choose the add the beginning of the string that usually has ANSI code (as it is the title for the print) or have ANSI code in the string by
+        setting 'ansi_all'=True. Slower that way, hence the default being 'ansi_all'=False.
 
         Args:
-            init_string (str): the initial string to be reformatted. The string doesn't include the key name at the beginning of said string.
-            string_begin (str): the ANSI formatted string before 'init_string'. Needed so that the ANSI string length is not taken into account
-                in the print as it shouldn't show in most terminals.
-            rank (int): the file hierarchy rank for the string to be reformatted.
+            string (str): the string to reformat, with or without the title (usually containing ANSI code).
+            title (str, optional): the beginning of the string usually with ANSI code. Defaults to ''.
+            rank (int, optional): the rank in the hierarchy. The higher the rank, the further down in the file hierarchy the printed information is.
+                It is used to also take into account the indentation length. Defaults to 0.
+            ansi_all (bool, optional): If true, all the string is checked for ANSI code as it does count as string length but not in the terminal. If only 'title'
+                has ANSI code, then keep it False. Defaults to False.
 
         Returns:
-            list[str]: the new reformatted string as a list[str] where each string represents a line (i.e. there is a linebreak after each given string.)
+            list[str]: the list of reformatted strings with each having a maximum visualised length (i.e. when printed on a terminal that recognises ANSI code).
+            When printing the strings, there should be a linebreak between each list elements.
         """
 
-        # Placeholder for ansi beginning string
-        without_ansi = re.sub(self.ansi_escape_pattern, '', string_before)
-        string = len(without_ansi) * ' ' + string 
+        # Setup init
         max_string_len = self.max_width - self.len_indentation * rank
 
-        # Create string
-        description = [
+        # If ANSI everywhere
+        if ansi_all:
+            string = title + string
+
+            description = []
+            for section in string.split('\n'):
+                current_segment = []
+                current_len = 0
+
+                for piece in self.ansi_escape_pattern.split(section):
+                    if self.ansi_escape_pattern.match(piece):
+                        current_segment.append(piece)
+                    else:
+                        while len(piece) > 0:
+                            space_left = max_string_len - current_len
+
+                            if len(piece) <= space_left:
+                                current_segment.append(piece)
+                                current_len += len(piece)
+                                piece = ''
+                            else:
+                                current_segment.append(piece[:space_left])
+                                description.append(''.join(current_segment))
+                                piece = piece[space_left:]
+                                current_segment = []
+                                current_len = 0
+            if current_segment or current_len > 0:
+                description.append(''.join(current_segment))
+        else:
+            # Placeholder for ansi beginning string
+            without_ansi = re.sub(self.ansi_escape_pattern, '', title)
+            string = len(without_ansi) * ' ' + string 
+
+            description = [
             section[i:i + max_string_len].strip()
             for section in string.split('\n')  # keeping the desired linebreaks
             for i in range(0, len(section), max_string_len)
-        ]
-        description[0] = string_before + description[0]  # add the initial ANSI characters
+            ]
+            description[0] = title + description[0]
         return description
-
-    def brouillon(self, str_input: str, max_len: int) -> list[str]:
-        # TODO: draft for the string reformatting
-
-        segments = []
-        for section in str_input.split('\n'):
-            current_segment = []
-            current_len = 0
-
-            for piece in self.ansi_escape_pattern.split(section):
-                if self.ansi_escape_pattern.match(piece):
-                    current_segment.append(piece)
-                else:
-                    while len(piece) > 0:
-                        space_left = max_len - current_len
-
-                        if len(piece) <= space_left:
-                            current_segment.append(piece)
-                            current_len += len(piece)
-                            piece = ''
-                        else:
-                            current_segment.append(piece[:space_left])
-                            segments.append(''.join(current_segment))
-                            piece = piece[space_left:]
-                            current_segment = []
-                            current_len = 0
-
-
 
     def reformat_testing(self, input_string: str, max_length: int) -> list[str]:
         # TODO: just testing the new method to improve on it
@@ -253,7 +262,6 @@ class HDF5Handler:
 
         return segments
 
-
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
         Private instance method to explore a given h5py.File or h5py.Group. Returns the information in a list of strings.
@@ -285,15 +293,15 @@ class HDF5Handler:
             # Information setup
             item_info = [
                 string 
-                for key in HDF5Handler.sub_default_keys
-                for string in self._reformat_string(item.attrs.get(key, f'No {key}'), f"\033[92m{key}\033[0m ", rank)
+                for key in self.sub_default_keys
+                for string in self._reformat_string(item.attrs.get(key, f'No {key}'), f"\033[92m{key}:\033[0m ", rank)
             ]
             if self.all_info:
                 item_info += [
                     string
                     for key in item.attrs.keys()
                     if key not in self.sub_default_keys
-                    for string in self._reformat_string(item.attrs[key], f"\033[92m{key}\033[0m ", rank)
+                    for string in self._reformat_string(item.attrs[key], f"\033[92m{key}:\033[0m ", rank)
                 ]
             
             # Checking the type
@@ -301,9 +309,9 @@ class HDF5Handler:
                 string_beginning = f"\033[1;94mDataset {nb_datasets}: \033[97m"
                 info_datasets.extend(
                     self._reformat_string(
-                        f"(shape: {item.shape}, dtype: '{item.dtype}')",
-                        f"\033[1;94mDataset {nb_datasets}: \033[97m{key}\033[0m ",
-                        0
+                        f"\033[1;35mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')",
+                        rank=rank,
+                        ansi_all=True
                     ) + item_info
                 )
                 nb_datasets += 1
@@ -311,9 +319,9 @@ class HDF5Handler:
             elif isinstance(item, h5py.Group):
                 info_groups.extend(
                     self._reformat_string(
-                        f"(member name(s): \033[1m{', '.join(item.keys())}\033[0m)",  #TODO: this is wrong, need to change it
-                        f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m ",
-                        0
+                        f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)",
+                        rank=rank,
+                        ansi_all=True
                     ) + item_info
                 )
                 nb_groups += 1

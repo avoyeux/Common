@@ -7,8 +7,9 @@ Lastly, there is also some created useful decorators.
 
 # Imports which help for [...]
 from .RE import *  ## [...] the re module/library
-from .HDF5 import * ## [...] HDF5 file handling
+from .HDF5 import *  ## [...] HDF5 file handling
 from .Plot import *  ## [...] the matplotlib library
+from .Dates import *  ## [...] for date reformatting
 from .SPICE import *  ## [...] SPICE catalogue and filename manipulation
 from .STEREO import *  ## [...] STEREO image processing
 from .Decorators import *  ## [...] personal decorators

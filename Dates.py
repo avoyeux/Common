@@ -51,3 +51,30 @@ class CustomDate:
         date_part, time_part = date_str.split(b' ')
         self.year, self.month, self.day = map(int, date_part.split(b"/"))
         self.hour, self.minute, self.second = map(int, time_part.split(b':'))
+
+
+class DatesUtils:
+    """
+    To store staticmethod function to help with dating stuff.
+    """
+
+    @staticmethod
+    def days_per_month(year: int) -> list[int]:
+        """
+        To get how many days are in each month for a specific year (as there are leap years).
+        For ease of use, the indexing values are the same than the corresponding month number. i.e. index 2 will give the number of days in February. Index 0 just
+        outputs 0.
+
+        Args:
+            year (int): the Gregorian calendar year.
+
+        Returns:
+            list[int]: list of the days per month with index 0 giving 0, index 1 the days in January, etc.
+        """
+
+        # Usual days
+        days_per_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+
+        # Leap years
+        if (year % 4 == 0 and year % 100 !=0) or (year % 400 == 0): days_per_month[2] = 29
+        return days_per_month

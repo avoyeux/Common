@@ -69,8 +69,9 @@ class Decorators:
     """
     To store useful function decorators that I created.
     """
+    #TODO: add decorator that prints all inputs.
     
-    @staticmethod  #TODO: add prints on the inputs also
+    @staticmethod  
     def running_time(verbose_name: str = 'verbose', flush_name: str = 'flush') -> Callable[[F], F]:
         """
         The 'shell' of the Decorators.Utils._actual_running_time_decorator decorator function. This shell was created to decide when a decorator factory needs to

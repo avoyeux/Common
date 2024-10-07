@@ -105,8 +105,13 @@ class StereoUtils:
         return list_fullpath
 
     @staticmethod
-    def image_preprocessing(filenames: str | list[str] | pd.Series, clip_percentages: tuple[int | float, int | float] = (1, 99.99), clip_nan: bool = True,
-                            log: bool = True, log_lowercut: int = 1) -> np.ndarray:
+    def image_preprocessing(
+            filenames: str | list[str] | pd.Series,
+            clip_percentages: tuple[int | float, int | float] = (1, 99.99),
+            clip_nan: bool = True,
+            log: bool = True,
+            log_lowercut: int = 1
+        ) -> np.ndarray:
         """Not finished yet as I don't remember exactly what needs to be kept and what shouldn't"""
         
         if isinstance(filenames, str): 

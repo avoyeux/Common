@@ -36,7 +36,14 @@ class SSHMirroredFilesystem:
     # Locks for the list 
     mp_lock = mp.Lock()
 
-    def __init__(self, host_shortcut: str = 'sol', compression: str = 'z', connection_timeout: int | float = 20, verbose: int = 0, flush: bool = False) -> None:
+    def __init__(
+            self,
+            host_shortcut: str = 'sol',
+            compression: str = 'z',
+            connection_timeout: int | float = 20,
+            verbose: int = 0,
+            flush: bool = False
+        ) -> None:
         """
         It opens an ssh connection to the server by saving a control socket file in the OS specific temporary directory.
         WSL needs to be set up if the user is on Windows OS.

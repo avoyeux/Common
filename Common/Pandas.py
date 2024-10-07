@@ -31,6 +31,6 @@ class Pandas:
             if try_convert_string: x = float(x)
             return round(x, decimals)
         except Exception as e:
-            if verbose > 0: print(f'\033[31mPandas.safe_round exception occured: {e}. Keeping initial value.\033[0m', flush=flush)
+            if verbose > 0: print(f'\033[31mPandas.safe_round exception occurred: {e}. Keeping initial value.\033[0m', flush=flush)
             return x
         

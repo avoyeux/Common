@@ -97,11 +97,11 @@ class Decorators:
             func = verbose_name
             verbose_name = 'verbose'
             flush_name = 'flush'
-            return DecoratorsUtils._actual_running_time_decorator(func, verbose_name, flush_name)
+            return DecoratorsUtils.actual_running_time_decorator(func, verbose_name, flush_name)
         
         # If arguments are passed or empty brackets are used, i.e. @Decorators.running_time()
         def decorator(func: F) -> F:
-            return DecoratorsUtils._actual_running_time_decorator(func, verbose_name, flush_name)
+            return DecoratorsUtils.actual_running_time_decorator(func, verbose_name, flush_name)
         return decorator
 
 
@@ -111,7 +111,7 @@ class DecoratorsUtils:
     """
 
     @staticmethod
-    def _actual_running_time_decorator(func: F, verbose_name: str, flush_name: str) -> F:
+    def actual_running_time_decorator(func: F, verbose_name: str, flush_name: str) -> F:
         """
         Decorator that prints the starting time of the decorated function in bold blue, and prints the finish running time in bold green.
         The finish time is in readable format, i.e. if any, the time is separated in days, hours, minutes, seconds and centiseconds if the total time is less than a
@@ -173,7 +173,7 @@ class DecoratorsUtils:
         return wrapper
 
     @staticmethod
-    def _format_time_seconds(seconds: int | float) -> str:
+    def format_time_seconds(seconds: int | float) -> str:
         """
         Creates as string based on a time input in seconds. The string shows the corresponding time in days, hours, minutes and seconds.
 

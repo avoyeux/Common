@@ -22,3 +22,4 @@ setup(
     install_requires=load_requirements(),
     description='Some functions that I use a lot.',
 )
+

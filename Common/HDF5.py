@@ -14,10 +14,8 @@ from typing import Self  # used to type annotate an instance of a class
 # Personal imports
 from .ServerConnection import SSHMirroredFilesystem
 
-from typeguard import typechecked 
-from .Decorators import ClassDecorator, Decorators
 
-# @ClassDecorator(decorator=Decorators.running_time)
+
 class HDF5Handler:
     """
     To add functionalities when opening an HDF5 file (i.e. .h5 files).
@@ -220,47 +218,6 @@ class HDF5Handler:
             ]
             description[0] = title + description[0]
         return description
-
-    def reformat_testing(self, input_string: str, max_length: int) -> list[str]:
-        # TODO: just testing the new method to improve on it
-
-        # Pattern to find ANSI escape sequences
-        ansi_pattern = re.compile(r'(\x1b\[[0-9;]*m)')
-
-        # Split the string into segments that include ANSI sequences
-        pieces = ansi_pattern.split(input_string)  # Keeps the ANSI
-        segments = []
-        current_length = 0
-        current_segment = []
-
-        for piece in pieces:
-            if ansi_pattern.match(piece):
-                # If the piece is an ANSI sequence, add it to the current segment
-                current_segment.append(piece)
-            else:
-                # Process non-ANSI piece
-                while len(piece) > 0:
-                    # Calculate available space in the current segment
-                    space_left = max_length - current_length
-
-                    # If the piece fits into the current segment, add it, otherwise split
-                    if len(piece) <= space_left:
-                        current_segment.append(piece)
-                        current_length += len(piece)
-                        piece = ''
-                    else:
-                        # Add what can fit and start a new segment
-                        current_segment.append(piece[:space_left])
-                        segments.append(''.join(current_segment))
-                        piece = piece[space_left:]
-                        current_segment = []
-                        current_length = 0
-
-        # Add the last segment if any remains
-        if current_segment or current_length > 0:
-            segments.append(''.join(current_segment))
-
-        return segments
 
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """

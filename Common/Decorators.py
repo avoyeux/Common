@@ -167,7 +167,7 @@ class DecoratorsUtils:
                 END_time = time()
                 DIF_time = END_time - START_time
 
-                time_string = DecoratorsUtils._format_time_seconds(DIF_time)
+                time_string = DecoratorsUtils.format_time_seconds(DIF_time)
                 if verbose > 0: print(f"\033[92m{func.__name__} ended on {ctime(END_time)} ({time_string}).\033[0m", flush=flush)                 
             return result
         return wrapper

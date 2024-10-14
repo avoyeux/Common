@@ -196,7 +196,12 @@ class SSHMirroredFilesystem:
                 print(f'\033[1;31mFailed to disconnect from {self.host_shortcut}. Error: {error_message}\033[0m', flush=self.flush)
 
     @staticmethod
-    def remote_to_local(remote_filepaths: str | list[str], host_shortcut: str = 'sol', compression: str = 'z', strip_level: int = 2) -> str | list[str]:
+    def remote_to_local(
+            remote_filepaths: str | list[str],
+            host_shortcut: str = 'sol',
+            compression: str = 'z',
+            strip_level: int = 2
+    ) -> str | list[str]:
         """
         Given server filepath(s), it returns the created corresponding local filepath(s). Partially mirrors the server directory path(s) inside a temporary folder.
 
@@ -241,7 +246,7 @@ class SSHMirroredFilesystem:
         # Local filepath setup 
         length = len(remote_filepaths)
         local_filepaths = [None] * length
-        for i in range(length): local_filepaths[i] = os.path.join(folder_path, SSHMirroredFilesystem._strip(remote_filepaths[i], 1))
+        for i in range(length): local_filepaths[i] = os.path.join(folder_path, SSHMirroredFilesystem._strip(remote_filepaths[i], strip_level))
 
         if len(local_filepaths) == 1: return local_filepaths[0]
         return local_filepaths    

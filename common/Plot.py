@@ -4,11 +4,12 @@ For functions that are related to plotting data
 """
 
 # IMPORTS
+import typing
 import numpy as np
 
 
 
-class PlotFunctions:
+class Plot:
     """
     To store regularly used plotting functions
     """
@@ -35,3 +36,17 @@ class PlotFunctions:
             if im0[ii, jj] == 1: lines += [([ii - .5, ii - .5], [jj - .5, jj + .5])]
             if im1[ii, jj] == 1: lines += [([ii - .5, ii + .5], [jj - .5, jj - .5])]
         return lines
+    
+    @staticmethod
+    def random_hexadecimal_int_color_generator() -> typing.Generator[int, None, None]:
+        """
+        Generator that yields a color value in integer hexadecimal code format.
+
+        Returns:
+            typing.Generator[int, None, None]: A generator that yields random integers representing colours in hexadecimal format.
+
+        Yields:
+            int: A random integer representing a color in hexadecimal format (in the range [0, 0xFFFFFF)).
+        """
+
+        while True: yield np.random.randint(0, 0xffffff)

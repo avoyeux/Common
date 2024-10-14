@@ -1,5 +1,5 @@
 """
-To setup and install the Common package.
+To setup and install the common package.
 """
 
 # Imports
@@ -14,7 +14,7 @@ def load_requirements(
     return installs  
 
 setup(
-    name='Common',
+    name='common',
     version='0.0.1',
     author='Voyeux Alfred',
     author_email='alfredvoyeux@hotmail.com',

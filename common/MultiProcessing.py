@@ -17,6 +17,36 @@ import multiprocessing.shared_memory
 __all__ = ['MultiProcessing']
 
 
+class SharedMemoryList(list):
+    """
+    Private class to be able to use .close() and .unlink() directly on a list of shared memory objects.
+    It inherits from the list class so that the instance itself it a list.
+    """
+
+    def __init__(self, shm: list[mp.shared_memory.SharedMemory]) -> None:
+        """
+        To be able to use .close() and .unlink() directly on a list of shared memory objects.
+
+        Args:
+            shm (list[mp.shared_memory.SharedMemory]): the list of the shared memory objects.
+        """
+
+        super().__init__(shm)
+    
+    def close(self) -> None:
+        """
+        Calls the .close() method on each shared memory object inside the list.
+        """
+
+        for memory in self: memory.close()
+    
+    def unlink(self) -> None:
+        """
+        Calls the .unlink() method on each shared memory object inside the list.
+        """
+
+        for memory in self: memory.unlink()
+
 
 class MultiProcessing:
     """
@@ -34,7 +64,7 @@ class MultiProcessing:
             function_input_shared_memory: bool = False,
             identifier: bool = False,
             while_True: bool = False,        
-    ) -> list:
+        ) -> list:
         """
         To multiprocess a given function with the corresponding data and keyword arguments. The input function needs to have the data argument as the first 
         function argument.
@@ -67,7 +97,7 @@ class MultiProcessing:
                 the list will be (nb_processes, corresponding data section size, ...).
         """
 
-        instance = MultiprocessingUtils(
+        instance = MultiProcessingUtils(
             input_data=input_data,
             function=function,
             function_kwargs=function_kwargs,
@@ -103,31 +133,81 @@ class MultiProcessing:
             return[(i, i) for i in range(data_length)]
     
     @staticmethod
-    def shared_memory(data: np.ndarray) -> tuple[mp.shared_memory.SharedMemory, dict[str, any]]:
+    def create_shared_memory(
+            data: np.ndarray | list[np.ndarray],
+            multiple: bool = False,
+        ) -> tuple[mp.shared_memory.SharedMemory | list[mp.shared_memory.SharedMemory], dict[str, any]]:
         """
-        Creating a shared memory space given an input np.ndarray.
+        Creating shared memory object(s) given an input ndarray or list of ndarray.  
 
         Args:
-            data (np.ndarray): data array that you want to create a shared memory object for.
+            data (np.ndarray | list[np.ndarray]): data array that you want to create shared memory object(s) for.
+            multiple (bool, optional): choosing to create multiple shared memories or just one. Defaults to False.
 
         Returns:
-            tuple[SharedMemory, dict[str, any]]: information needed to access the shared memory object.
+            tuple[mp.shared_memory.SharedMemory | list[mp.shared_memory.SharedMemory], dict[str, any]]: information needed to access the shared memory object(s).
         """
 
-        # Initialisations
-        shm = mp.shared_memory.SharedMemory(create=True, size=data.nbytes)
-        info = {
-            'name': shm.name,
-            'shape': data.shape,
-            'dtype': data.dtype,
-        }
-        shared_array = np.ndarray(info['shape'], dtype=info['dtype'], buffer=shm.buf)
-        np.copyto(shared_array, data)
-        shm.close()
+        if multiple:
+            shm, info = MultiProcessingUtils.shared_memory_multiple(data)
+
+        elif isinstance(data, list):
+            try: 
+                data = np.ndarray(data)
+            except Exception:
+                Exception(f"shared_memory function couldn't change data to an ndarray. Setting 'multiple' to True.")
+                shm, info = MultiProcessingUtils.shared_memory_multiple(data)
+        else:
+            # Initialisations
+            shm = mp.shared_memory.SharedMemory(create=True, size=data.nbytes)
+            info = {
+                'name': shm.name,
+                'shape': data.shape,
+                'dtype': data.dtype,
+            }
+            shared_array = np.ndarray(info['shape'], dtype=info['dtype'], buffer=shm.buf)
+            np.copyto(shared_array, data)
+            shm.close()
         return shm, info
     
+    @staticmethod
+    def open_shared_memory(
+            data_info: dict[str, any]
+        ) -> tuple[mp.shared_memory.SharedMemory, np.ndarray] | tuple[SharedMemoryList, list[np.ndarray]]:
+        """
+        To open a shared memory multiprocessing object using the MultiProcessing.create_shared_memory method shared memory information.
 
-class MultiprocessingUtils:
+        Args:
+            data_info (dict[str, any]): the shared memory information gotten from MultiProcessing.create_shared_memory() method.
+
+        Returns:
+            tuple[mp.shared_memory.SharedMemory, np.ndarray] | tuple[SharedMemoryList, list[np.ndarray]]: the shared memory object buffer
+                and the corresponding np.ndarray view of the buffer. Depending on the information given as input, the output can be lists 
+                of the buffers and buffer views or just one buffer with the corresponding data view. Regardless, .close() or .unlink() can 
+                directly be used on the buffer(s).
+        """
+
+        if isinstance(data_info['name'], str):
+            shm = mp.shared_memory.SharedMemory(name=data_info['name'])
+            data = np.ndarray(shape=data_info['shape'], dtype=data_info['dtype'], buffer=shm.buf)
+            return shm, data
+        
+        else:
+            data_len = len(data_info['name'])
+            shm = [None] * data_len
+            data = [None] * data_len
+
+            for i in range(data_len):
+                shm[i] = mp.shared_memory.SharedMemory(name=data_info['name'][i])
+                data[i] = np.ndarray(
+                    shape=data_info['shape'][i],
+                    dtype=data_info['dtype'][i],
+                    buffer=shm[i].buf,
+                )
+            return SharedMemoryList(shm), data
+
+
+class MultiProcessingUtils:
     """
     To store some private functions.
     """
@@ -205,7 +285,7 @@ class MultiprocessingUtils:
         # Shared memory setup
         if not self.shared_memory and self.function_shared_memory:
             if not isinstance(self.input_data, np.ndarray): self.input_data = np.array(self.input_data)
-            shm, self.input_data = MultiProcessing.shared_memory(self.input_data)
+            shm, self.input_data = MultiProcessing.create_shared_memory(self.input_data)
         elif self.shared_memory and (not self.function_shared_memory):
             # Open shared memory
             shm = mp.shared_memory.SharedMemory(name=self.input_data['name'])
@@ -381,7 +461,7 @@ class MultiprocessingUtils:
         Multiprocessing all the data using a while loop. This means that the function to be multiprocessed should only take 
         one index of the main data as the first function argument. 
         For this 'all_data' function, all the initial data is given as an argument to the function to be multiprocessed through
-        a dictionary with the necessary information to open the corresponding shared memory object (cf. MultiProcessing.shared_memory()).
+        a dictionary with the necessary information to open the corresponding shared memory object (cf. MultiProcessing.create_shared_memory()).
 
         Args:
             input_queue (mp.queues.Queue): has the index identifier of the data is going to be processed.
@@ -588,3 +668,33 @@ class MultiprocessingUtils:
             result = input_function(data, **function_kwargs)
             # Save result
             output_queue.put((identifier, result))                
+
+    @staticmethod
+    def shared_memory_multiple(data: np.ndarray | list[np.ndarray]) -> tuple[SharedMemoryList, dict[str, list]]:
+        """
+        To create multiple multiprocessing shared memory objects and return the corresponding references and information
+        to then be able to re-access or unlink the memories.
+
+        Args:
+            data (np.ndarray | list[np.ndarray]): the data to be stored in shared memory objects.
+
+        Returns:
+            tuple[SharedMemoryList, dict[str, list]]: the shared memory pointers saved as an instance of the SharedMemoryList class so that
+                .unlink() and .close() work directly on the references. The other output in the tuple is a dictionary containing the necessary 
+                information to re-access the shared memory objects.
+        """
+
+        shm = [
+            mp.shared_memory.SharedMemory(create=True, size=section.nbytes)
+            for section in data
+        ]
+        info = {
+            'name': [memory.name for memory in shm],
+            'shape': [section.shape for section in data],
+            'dtype': [section.dtype for section in data],
+        }
+        for i, section in enumerate(data):
+            shared_array = np.ndarray(info['shape'][i], dtype=info['dtype'][i], buffer=shm[i].buf)
+            np.copyto(shared_array, section)
+            shm[i].close()
+        return SharedMemoryList(shm), info

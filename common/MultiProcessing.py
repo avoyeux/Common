@@ -69,8 +69,8 @@ class MultiProcessing:
         To multiprocess a given function with the corresponding data and keyword arguments. The input function needs to have the data argument as the first 
         function argument.
         You can choose to multiprocess using with or without a while loop (c.f. 'while_True' argument) and even with a shared memory information dictionary 
-        (gotten from cls.shared_memory) as the 'input_data' value to the class and/or the multiprocessed function. You can also decide to input the data 
-        identifier in the function to be multiprocessed so that you know which part of the data is being inputted.
+        (gotten from cls.create_shared_memory) as the 'input_data' value to the class and/or the multiprocessed function. You can also decide to input the
+        data identifier in the function to be multiprocessed so that you know which part of the data is being inputted.
 
         Args:
             input_data (list | np.ndarray | dict[str, any]): the data to be multiprocessed. It can also be the data shared memory information 
@@ -136,6 +136,7 @@ class MultiProcessing:
     def create_shared_memory(
             data: np.ndarray | list[np.ndarray],
             multiple: bool = False,
+            verbose: int = 1,
         ) -> tuple[mp.shared_memory.SharedMemory | list[mp.shared_memory.SharedMemory], dict[str, any]]:
         """
         Creating shared memory object(s) given an input ndarray or list of ndarray.  
@@ -143,6 +144,8 @@ class MultiProcessing:
         Args:
             data (np.ndarray | list[np.ndarray]): data array that you want to create shared memory object(s) for.
             multiple (bool, optional): choosing to create multiple shared memories or just one. Defaults to False.
+            verbose(int, optional): choosing to print a message when 'multiple' is set to False and the data can't be converted to an ndarray.
+                Defaults to 1.
 
         Returns:
             tuple[mp.shared_memory.SharedMemory | list[mp.shared_memory.SharedMemory], dict[str, any]]: information needed to access the shared memory object(s).
@@ -155,7 +158,7 @@ class MultiProcessing:
             try: 
                 data = np.ndarray(data)
             except Exception:
-                Exception(f"shared_memory function couldn't change data to an ndarray. Setting 'multiple' to True.")
+                if verbose > 0: print("\033[37mShared_memory function couldn't change data to an ndarray. Creating multiple shared memories.\033[0m")
                 shm, info = MultiProcessingUtils.shared_memory_multiple(data)
         else:
             # Initialisations

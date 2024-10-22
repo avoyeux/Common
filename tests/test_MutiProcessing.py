@@ -8,7 +8,7 @@ import typing
 import numpy as np
 import multiprocessing as mp
 # Personal 
-from Common import MultiProcessing, Decorators
+from common import MultiProcessing, Decorators
 
 
 class Test:
@@ -24,7 +24,7 @@ class Test:
     @Decorators.running_time
     def trying_it_out(self):
 
-        values = [i for i in range(1000000)]
+        values = [i for i in range(1000)]
 
         # values = np.array(values)
         # shm, values = MultiProcessing.shared_memory(values)
@@ -38,9 +38,10 @@ class Test:
             },
             'processes': 5,
             'shared_memory_input': False,
-            'function_input_shared_memory': False,
+            'create_shared_memory': False,
+            'transfer_all_data': False,
             'identifier': True,
-            'while_True': False,
+            'while_True': True,
         }
         results = MultiProcessing.multiprocessing(**kwargs)
         # shm.unlink()

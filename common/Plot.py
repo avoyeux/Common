@@ -50,3 +50,37 @@ class Plot:
         """
 
         while True: yield np.random.randint(0, 0xffffff)
+
+    @staticmethod
+    def different_colours(omit: str | list[str] = ['white']) -> typing.Generator[str, None, None]:
+        """
+        To get plot colours that are really different.
+
+        Args:
+            omit (str | list[str], optional): the colours to omit.
+
+        Returns:
+            typing.Generator[int, None, None]: the colour name
+        """
+
+        if isinstance(omit, str): omit = [omit]
+
+        colours = [
+            'white',
+            'blue',
+            'red',
+            'brown',
+            'green',
+            'pink',
+            'beige',
+            'purple',
+            'yellow',
+            'gray',
+            'turquoise',
+            'orange',
+            'black',
+            'silver',
+            'gold',
+        ]
+        colours = [c for c in colours if c not in omit]
+        for c in colours: yield c

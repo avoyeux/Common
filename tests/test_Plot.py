@@ -46,5 +46,58 @@ class TestColours:
                 print('All colours tested.')
                 return
 
+
+class TestContours:
+
+    @Decorators.running_time
+    def __init__(self):
+
+        self.mask = self.create_mask()
+
+        self.plot()
+
+    def create_mask(self) -> np.ndarray:
+
+        arr = np.random.rand(100, 200)
+        filters = arr > 0.5
+
+        mask = np.zeros(arr.shape)
+        mask[filters] = 1
+        return mask
+
+    def plot(self):
+        
+        # Get contours
+        lines = Plot.contours(self.mask)
+
+        plt.figure(figsize=(12, 5))
+
+        first_lines = lines[0]
+        plt.plot(
+            first_lines[1], 
+            first_lines[0],
+            color='r',
+            linewidth=1,
+            label='contour',
+        )
+        for line in lines[1:]:
+            plt.plot(
+                line[1],
+                line[0],
+                color='r',
+                linewidth=1,
+            )
+        
+        # Plot mask
+        plt.imshow(self.mask, alpha=0.4, label='mask')
+        plt.savefig('test_plot_conours_image.png', dpi=500)
+        plt.close()
+
+
+
+
+
 if __name__ == '__main__':
-    TestColours(omit='')
+    # TestColours(omit='')
+
+    TestContours()

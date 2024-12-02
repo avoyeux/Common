@@ -59,7 +59,7 @@ class TestContours:
     def create_mask(self) -> np.ndarray:
 
         arr = np.random.rand(100, 200)
-        filters = arr > 0.5
+        filters = arr > 0.8
 
         mask = np.zeros(arr.shape)
         mask[filters] = 1
@@ -89,13 +89,11 @@ class TestContours:
             )
         
         # Plot mask
-        plt.imshow(self.mask, alpha=0.4, label='mask', origin='lower')
+        plt.imshow(self.mask, alpha=0.4, label='mask')
         plt.legend()
         plt.savefig('test_plot_contours_image.png', dpi=500)
         plt.close()
         print('Test image with contours saved.')
-
-
 
 
 

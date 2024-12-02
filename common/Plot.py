@@ -17,7 +17,7 @@ class Plot:
     @staticmethod
     def contours(mask: np.ndarray) -> list[tuple[list[float], list[float]]]:
         """
-        To plot the contours given a mask.
+        To plot the contours given a mask.  #TODO: need to understand why this code doesn't work if the input array is of type uint8
 
         Args:
             mask (np.ndarray): a boolean mask representing the mask for which the contours are needed.

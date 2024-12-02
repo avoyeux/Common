@@ -89,9 +89,11 @@ class TestContours:
             )
         
         # Plot mask
-        plt.imshow(self.mask, alpha=0.4, label='mask')
-        plt.savefig('test_plot_conours_image.png', dpi=500)
+        plt.imshow(self.mask, alpha=0.4, label='mask', origin='lower')
+        plt.legend()
+        plt.savefig('test_plot_contours_image.png', dpi=500)
         plt.close()
+        print('Test image with contours saved.')
 
 
 

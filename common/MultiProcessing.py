@@ -24,7 +24,7 @@ class SharedMemoryList(list):
     It inherits from the list class so that the instance itself it a list.
     """
 
-    def __init__(self, shm: list[mp.shared_memory.SharedMemory]) -> None:
+    def __init__(self, shm: list[mp.shared_memory.SharedMemory] | mp.shared_memory.SharedMemory) -> None:
         """
         To be able to use .close() and .unlink() directly on a list of shared memory objects.
 

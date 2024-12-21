@@ -10,9 +10,6 @@ from .RE import *  ## [...] the re module/library
 from .HDF5 import *  ## [...] HDF5 file handling
 from .Plot import *  ## [...] the matplotlib library
 from .Dates import *  ## [...] for date reformatting
-from .SPICE import *  ## [...] SPICE catalogue and filename manipulation
-from .STEREO import *  ## [...] STEREO image processing
 from .Decorators import *  ## [...] personal decorators
 from .MultiProcessing import *  ## [...] the multiprocessing library
-from .ServerConnection import *  ## [...] IAS server connection
 from .ArrayManipulation import *  ## [...] manipulation of ndarray

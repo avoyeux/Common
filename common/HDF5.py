@@ -11,9 +11,6 @@ import shutil
 
 from typing import Self  # used to type annotate an instance of a class
 
-# Personal imports
-from .ServerConnection import SSHMirroredFilesystem
-
 
 
 class HDF5Handler:
@@ -72,20 +69,12 @@ class HDF5Handler:
             Exception: when not able to open the HDF5 file.
 
         Returns:
-            Self: adds the new functionalities like .info(level).
+            Self.
         """
 
-        # Initial check
-        if not os.path.exists(filepath):
-            # Fetching the file from the server.
-            if verbose > 0: print(f"\033[37mHDF5 file with filepath {filepath} not found. Connecting to the server...", flush=flush)
-            filepath = SSHMirroredFilesystem.remote_to_local(filepath)
-            if verbose> 0: print(f"\033[37mFile imported to local\033[0m", flush=flush)
         try:
             h5File = h5py.File(filepath, 'r')
 
-            # Cleaning up if the file was fetched
-            SSHMirroredFilesystem.cleanup(verbose=verbose)  # TODO: need to change this as I shouldn't remove the file yet.
         except Exception as e:
             raise Exception(f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file. Error: {e}\033[0m")
      
@@ -135,7 +124,7 @@ class HDF5Handler:
         ] + [
             string
             for key in HDF5Handler.main_default_keys
-            for string in self._reformat_string(self.file.attrs.get(key, f'No {key}'), f"\033[92m{key}:\033[0m ")
+            for string in self._reformat_string(str(self.file.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ")
         ]
 
         if all_info:
@@ -143,7 +132,7 @@ class HDF5Handler:
                 string 
                 for key in self.file.attrs.keys()
                 if key not in HDF5Handler.main_default_keys
-                for string in self._reformat_string(self.file.attrs[key], f"\033[92m{key}:\033[0m ")
+                for string in self._reformat_string(str(self.file.attrs[key]), f"\033[92m{key}:\033[0m ")
             ]
         
         info += ["\n" + "=" * max_width + "\n"]            
@@ -251,14 +240,14 @@ class HDF5Handler:
             item_info = [
                 string 
                 for key in self.sub_default_keys
-                for string in self._reformat_string(item.attrs.get(key, f'No {key}'), f"\033[92m{key}:\033[0m ", rank)
+                for string in self._reformat_string(str(item.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ", rank)
             ]
             if self.all_info:
                 item_info += [
                     string
                     for key in item.attrs.keys()
                     if key not in self.sub_default_keys
-                    for string in self._reformat_string(item.attrs[key], f"\033[92m{key}:\033[0m ", rank)
+                    for string in self._reformat_string(str(item.attrs[key]), f"\033[92m{key}:\033[0m ", rank)
                 ]
             
             # Checking the type

@@ -1,6 +1,6 @@
 *
 !requirements.txt
-!/Common/
+!/common/
 !/tests/
 !*.py
 !.gitignore

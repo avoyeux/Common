@@ -5,12 +5,13 @@ To help when using the HDF5 format. Initial created to have a similar option tha
 
 # IMPORTS
 import os
-import re
 import h5py
 import shutil
 
 from typing import Self  # used to type annotate an instance of a class
 
+# IMPORTS personal
+from .Formatting import stringFormatter
 
 
 class HDF5Handler:
@@ -41,13 +42,11 @@ class HDF5Handler:
         self.filename = filename
         self.file = HDF5File
 
-        # Attributes created at runtime
-        self.ansi_escape_pattern = re.compile(r'(\033\[[0-9;]*m)')
         # Placeholders 
         self.max_width: int
         self.all_info: bool
         self.indentation: str
-        self.len_indentation: int
+        self.formatter: stringFormatter
         
         # Miscellaneous attributes
         self.verbose = verbose
@@ -111,7 +110,11 @@ class HDF5Handler:
         self.max_width = max_width
         self.all_info = all_info
         self.indentation = indentation
-        self.len_indentation = len(indentation)
+        self.formatter = stringFormatter(
+            max_length=self.max_width,
+            indentation=self.indentation,
+            ansi=False,
+        )
 
         # Title centering
         title = f"HDF5 file '{self.filename}' information"
@@ -124,7 +127,7 @@ class HDF5Handler:
         ] + [
             string
             for key in HDF5Handler.main_default_keys
-            for string in self._reformat_string(str(self.file.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ")
+            for string in self.formatter.reformat_string(str(self.file.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ")
         ]
 
         if all_info:
@@ -132,7 +135,7 @@ class HDF5Handler:
                 string 
                 for key in self.file.attrs.keys()
                 if key not in HDF5Handler.main_default_keys
-                for string in self._reformat_string(str(self.file.attrs[key]), f"\033[92m{key}:\033[0m ")
+                for string in self.formatter.reformat_string(str(self.file.attrs[key]), f"\033[92m{key}:\033[0m ")
             ]
         
         info += ["\n" + "=" * max_width + "\n"]            
@@ -144,69 +147,6 @@ class HDF5Handler:
         info_list = info + info_extension
         print("\n".join(info_list), flush=self.flush)
         return self 
-
-    def _reformat_string(self, string: str, title: str = '', rank: int = 0, ansi_all: bool = False) -> list[str]:
-        """
-        To reformat a given string so that you can set a maximum length for each string line (i.e. before each linebreak).
-        You can also choose the add the beginning of the string that usually has ANSI code (as it is the title for the print) or have ANSI code in the string by
-        setting 'ansi_all'=True. Slower that way, hence the default being 'ansi_all'=False.
-
-        Args:
-            string (str): the string to reformat, with or without the title (usually containing ANSI code).
-            title (str, optional): the beginning of the string usually with ANSI code. Defaults to ''.
-            rank (int, optional): the rank in the hierarchy. The higher the rank, the further down in the file hierarchy the printed information is.
-                It is used to also take into account the indentation length. Defaults to 0.
-            ansi_all (bool, optional): If true, all the string is checked for ANSI code as it does count as string length but not in the terminal. If only 'title'
-                has ANSI code, then keep it False. Defaults to False.
-
-        Returns:
-            list[str]: the list of reformatted strings with each having a maximum visualised length (i.e. when printed on a terminal that recognises ANSI code).
-            When printing the strings, there should be a linebreak between each list elements.
-        """
-
-        # Setup init
-        max_string_len = self.max_width - self.len_indentation * rank
-
-        # If ANSI everywhere
-        if ansi_all:
-            string = title + string
-
-            description = []
-            for section in string.split('\n'):
-                current_segment = []
-                current_len = 0
-
-                for piece in self.ansi_escape_pattern.split(section):
-                    if self.ansi_escape_pattern.match(piece):
-                        current_segment.append(piece)
-                    else:
-                        while len(piece) > 0:
-                            space_left = max_string_len - current_len
-
-                            if len(piece) <= space_left:
-                                current_segment.append(piece)
-                                current_len += len(piece)
-                                piece = ''
-                            else:
-                                current_segment.append(piece[:space_left])
-                                description.append(''.join(current_segment))
-                                piece = piece[space_left:]
-                                current_segment = []
-                                current_len = 0
-            if current_segment or current_len > 0:
-                description.append(''.join(current_segment))
-        else:
-            # Placeholder for ansi beginning string
-            without_ansi = re.sub(self.ansi_escape_pattern, '', title)
-            string = len(without_ansi) * ' ' + string 
-
-            description = [
-            section[i:i + max_string_len].strip()
-            for section in string.split('\n')  # keeping the desired linebreaks
-            for i in range(0, len(section), max_string_len)
-            ]
-            description[0] = title + description[0]
-        return description
 
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
@@ -240,21 +180,21 @@ class HDF5Handler:
             item_info = [
                 string 
                 for key in self.sub_default_keys
-                for string in self._reformat_string(str(item.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ", rank)
+                for string in self.formatter.reformat_string(str(item.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ", rank)
             ]
             if self.all_info:
                 item_info += [
                     string
                     for key in item.attrs.keys()
                     if key not in self.sub_default_keys
-                    for string in self._reformat_string(str(item.attrs[key]), f"\033[92m{key}:\033[0m ", rank)
+                    for string in self.formatter.reformat_string(str(item.attrs[key]), f"\033[92m{key}:\033[0m ", rank)
                 ]
             
             # Checking the type
             if isinstance(item, h5py.Dataset):
                 string_beginning = f"\033[1;94mDataset {nb_datasets}: \033[97m"
                 info_datasets.extend(
-                    self._reformat_string(
+                    self.formatter.reformat_string(
                         f"\033[1;35mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')",
                         rank=rank,
                         ansi_all=True
@@ -264,7 +204,7 @@ class HDF5Handler:
             
             elif isinstance(item, h5py.Group):
                 info_groups.extend(
-                    self._reformat_string(
+                    self.formatter.reformat_string(
                         f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)",
                         rank=rank,
                         ansi_all=True
@@ -276,6 +216,6 @@ class HDF5Handler:
                 if level > -1: info_groups.extend(self._explore(item, max_level, level))
         
         group_info = [f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]
-        print_list = group_info + info_datasets + info_groups + ["-" * (self.max_width - self.len_indentation * rank)]
+        print_list = group_info + info_datasets + info_groups + ["-" * (self.max_width - len(self.indentation) * rank)]
         if rank != 0: print_list = [self.indentation + value for value in print_list]
         return print_list

@@ -26,7 +26,7 @@ class stringFormatter:
         # RUN-TIME 
         self.ansi_escape_pattern = re.compile(r'(\033\[[0-9;]*m)')
 
-    def reformat_string(self, string: str, title: str = '', rank: int = 0, ansi_all: bool = False) -> list[str]:
+    def reformat_string(self, string: str, title: str = '', rank: int = 0) -> list[str]:
         """
         To reformat a given string so that you can set a maximum length for each string line (i.e. before each linebreak).
         You can also choose the add the beginning of the string that usually has ANSI code (as it is the title for the print) or have ANSI code in the string by
@@ -37,8 +37,6 @@ class stringFormatter:
             title (str, optional): the beginning of the string usually with ANSI code. Defaults to ''.
             rank (int, optional): the rank in the hierarchy. The higher the rank, the further down in the file hierarchy the printed information is.
                 It is used to also take into account the indentation length. Defaults to 0.
-            ansi_all (bool, optional): If true, all the string is checked for ANSI code as it does count as string length but not in the terminal. If only 'title'
-                has ANSI code, then keep it False. Defaults to False.
 
         Returns:
             list[str]: the list of reformatted strings with each having a maximum visualised length (i.e. when printed on a terminal that recognises ANSI code).
@@ -49,7 +47,7 @@ class stringFormatter:
         max_string_len = self.max_length - len(self.indentation) * rank
 
         # If ANSI everywhere
-        if ansi_all:
+        if self.ansi:
             string = title + string
 
             description = []

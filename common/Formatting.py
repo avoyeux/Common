@@ -43,7 +43,10 @@ class stringFormatter:
             When printing the strings, there should be a linebreak between each list elements.
         """
 
-        # Setup init
+        # CHECK init
+        if len(string)==0: return ['']
+
+        # SETUP init
         max_string_len = self.max_length - len(self.indentation) * rank
 
         # If ANSI everywhere

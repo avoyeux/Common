@@ -85,4 +85,8 @@ class stringFormatter:
                 for i in range(0, len(section), max_string_len)
             ]
             description[0] = title + description[0]
+        description = [
+            self.indentation * rank + desc
+            for desc in description
+        ]
         return description

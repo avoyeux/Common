@@ -113,7 +113,7 @@ class HDF5Handler:
         self.formatter = stringFormatter(
             max_length=self.max_width,
             indentation=self.indentation,
-            ansi=False,
+            ansi=True,
         )
 
         # Title centering
@@ -192,12 +192,10 @@ class HDF5Handler:
             
             # Checking the type
             if isinstance(item, h5py.Dataset):
-                string_beginning = f"\033[1;94mDataset {nb_datasets}: \033[97m"
                 info_datasets.extend(
                     self.formatter.reformat_string(
                         f"\033[1;35mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')",
                         rank=rank,
-                        ansi_all=True
                     ) + item_info
                 )
                 nb_datasets += 1
@@ -207,7 +205,6 @@ class HDF5Handler:
                     self.formatter.reformat_string(
                         f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)",
                         rank=rank,
-                        ansi_all=True
                     ) + item_info
                 )
                 nb_groups += 1
@@ -215,7 +212,8 @@ class HDF5Handler:
                 # DEEPER 
                 if level > -1: info_groups.extend(self._explore(item, max_level, level))
         
-        group_info = [f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]
-        print_list = group_info + info_datasets + info_groups + ["-" * (self.max_width - len(self.indentation) * rank)]
-        if rank != 0: print_list = [self.indentation + value for value in print_list]
+        indentation = self.indentation * rank
+        group_info = [indentation + f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]
+        print_list = group_info + info_datasets + info_groups + [indentation + "-" * (self.max_width - len(self.indentation) * rank)]
+        # if rank != 0: print_list = [self.indentation + value for value in print_list]
         return print_list

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3.11
 """
-To help when using the HDF5 format. Initial created to have a similar option than the .info() in FITS files.
+To help when using the HDF5 format. Initial created to have a similar option than the .info() in
+FITS files.
 """
 
 # IMPORTS
@@ -17,7 +18,8 @@ from .Formatting import stringFormatter
 class HDF5Handler:
     """
     To add functionalities when opening an HDF5 file (i.e. .h5 files).
-    Main added functionality is the .info() which gives the information of a given HDF5 file (kind of similar to .info() from astropy.io.fits).
+    Main added functionality is the .info() which gives the information of a given HDF5 file (kind
+    of similar to .info() from astropy.io.fits).
     """
 
     main_default_keys = ['filename', 'creationDate', 'author', 'description']
@@ -26,16 +28,19 @@ class HDF5Handler:
     def __init__(self, filename: str, HDF5File: h5py.File, verbose: int, flush: bool) -> None:
         """
         To add functionalities when opening an HDF5 file (i.e. .h5 files).
-        Main added functionality is the .info() which gives the information of a given HDF5 file (kind of similar to .info() from astropy.io.fits).
-        Need to use the .open() classmethod function on a given HDF5 filepath for the class to work as intended.
+        Main added functionality is the .info() which gives the information of a given HDF5 file 
+        (kind of similar to .info() from astropy.io.fits).
+        Need to use the .open() classmethod function on a given HDF5 filepath for the class to work
+        as intended.
 
         Args:
             filename (str): filename of a given HDF5 file.
             HDF5File (h5py.File): the HDF5 file open in read mode.
             verbose (int): decides the level of the prints.
-            flush (bool): sets the internal buffer to immediately write the output to it's destination, i.e. it decides to force the prints or not. 
-                Has a negative effect on the running efficiency as you are forcing the buffer but makes sure that the print is outputted exactly when it is 
-                called (usually not the case when multiprocessing).
+            flush (bool): sets the internal buffer to immediately write the output to it's
+                destination, i.e. it decides to force the prints or not. Has a negative effect on
+                the running efficiency as you are forcing the buffer but makes sure that the print
+                is outputted exactly when it is called (usually not the case when multiprocessing).
         """
         
         # Non-optional instance attributes
@@ -60,9 +65,11 @@ class HDF5Handler:
         Args:
             filepath (str): the filepath to the HDF5 file.
             verbose (int, optional): decides the level of the prints. Defaults to 0.
-            flush (bool, optional): sets the internal buffer to immediately write the output to it's destination, i.e. it decides to force the prints or not. 
-                Has a negative effect on the running efficiency as you are forcing the buffer but makes sure that the print is outputted exactly when it is 
-                called (usually not the case when multiprocessing). Defaults to False.
+            flush (bool, optional): sets the internal buffer to immediately write the output to
+                it's destination, i.e. it decides to force the prints or not. Has a negative effect
+                on the running efficiency as you are forcing the buffer but makes sure that the
+                print is outputted exactly when it is called (usually not the case when
+                multiprocessing). Defaults to False.
 
         Raises:
             Exception: when not able to open the HDF5 file.
@@ -75,7 +82,10 @@ class HDF5Handler:
             h5File = h5py.File(filepath, 'r')
 
         except Exception as e:
-            raise Exception(f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file. Error: {e}\033[0m")
+            raise Exception(
+                f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file."
+                f"Error: {e}\033[0m"
+            )
      
         # Returning the class
         filename = os.path.basename(filepath)
@@ -90,14 +100,18 @@ class HDF5Handler:
 
     def info(self, level: int = 10, indentation: str = "| ", all_info: bool = True) -> Self:
         """
-        To print the general metadata and data information on the HDF5 file. Had the inspiration from the .info() method from astropy.io.fits
+        To print the general metadata and data information on the HDF5 file. Had the inspiration
+        from the .info() method from astropy.io.fits
 
         Args:
             level (int, optional): decides the max level of the information to be printed out. 
-                If 0 only gives the information on the main Datasets and Groups. 1 goes one level further down the hierarchy and vice versa. Defaults to 10.
-            indentation (str, optional): sets the indentation added every time you go down a level in the file hierarchy. Defaults to "  ". 
-            all_info (bool, optional): choosing to print all the attributes. If False, only the default attributes given by the two class level attributes are 
-                printed out. Defaults to True.
+                If 0 only gives the information on the main Datasets and Groups. 1 goes one level
+                further down the hierarchy and vice versa. Defaults to 10.
+            indentation (str, optional): sets the indentation added every time you go down a level
+                in the file hierarchy. Defaults to "| ". 
+            all_info (bool, optional): choosing to print all the attributes. If False, only the
+                default attributes given by the two class level attributes are printed out.
+                Defaults to True.
 
         Returns:
             Self: returns the instance to allow for chaining if needed.
@@ -127,7 +141,10 @@ class HDF5Handler:
         ] + [
             string
             for key in HDF5Handler.main_default_keys
-            for string in self.formatter.reformat_string(str(self.file.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ")
+            for string in self.formatter.reformat_string(
+                string=str(self.file.attrs.get(key, f'No {key}')),
+                prefix=f"\033[92m{key}:\033[0m ",
+            )
         ]
 
         if all_info:
@@ -135,7 +152,10 @@ class HDF5Handler:
                 string 
                 for key in self.file.attrs.keys()
                 if key not in HDF5Handler.main_default_keys
-                for string in self.formatter.reformat_string(str(self.file.attrs[key]), f"\033[92m{key}:\033[0m ")
+                for string in self.formatter.reformat_string(
+                    string=str(self.file.attrs[key]),
+                    prefix=f"\033[92m{key}:\033[0m ",
+                )
             ]
         
         info += ["\n" + "=" * max_width + "\n"]            
@@ -150,7 +170,8 @@ class HDF5Handler:
 
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
-        Private instance method to explore a given h5py.File or h5py.Group. Returns the information in a list of strings.
+        Private instance method to explore a given h5py.File or h5py.Group. Returns the information
+        in a list of strings.
 
         Args:
             group (h5py.File | h5py.Group): the HDF5 file or one of it's given groups to explore.
@@ -180,21 +201,32 @@ class HDF5Handler:
             item_info = [
                 string 
                 for key in self.sub_default_keys
-                for string in self.formatter.reformat_string(str(item.attrs.get(key, f'No {key}')), f"\033[92m{key}:\033[0m ", rank)
+                for string in self.formatter.reformat_string(
+                    string=str(item.attrs.get(key, f'No {key}')),
+                    prefix=f"\033[92m{key}:\033[0m ",
+                    rank=rank,
+                )
             ]
             if self.all_info:
                 item_info += [
                     string
                     for key in item.attrs.keys()
                     if key not in self.sub_default_keys
-                    for string in self.formatter.reformat_string(str(item.attrs[key]), f"\033[92m{key}:\033[0m ", rank)
+                    for string in self.formatter.reformat_string(
+                        string=str(item.attrs[key]),
+                        prefix=f"\033[92m{key}:\033[0m ",
+                        rank=rank,
+                    )
                 ]
             
             # Checking the type
             if isinstance(item, h5py.Dataset):
                 info_datasets.extend(
                     self.formatter.reformat_string(
-                        f"\033[1;35mDataset {nb_datasets}: \033[97m{key}\033[0m (shape: {item.shape}, dtype: '{item.dtype}')",
+                        string=(
+                            f"\033[1;35mDataset {nb_datasets}: \033[97m{key}\033[0m"
+                            f" (shape: {item.shape}, dtype: '{item.dtype}')"
+                        ),
                         rank=rank,
                     ) + item_info
                 )
@@ -203,7 +235,10 @@ class HDF5Handler:
             elif isinstance(item, h5py.Group):
                 info_groups.extend(
                     self.formatter.reformat_string(
-                        f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m (member name(s): \033[1m{', '.join(item.keys())}\033[0m)",
+                        string=(
+                            f"\033[1;94mGroup {nb_groups}: \033[97m{key}\033[0m"
+                            f" (member name(s): \033[1m{', '.join(item.keys())}\033[0m)"
+                        ),
                         rank=rank,
                     ) + item_info
                 )
@@ -213,7 +248,11 @@ class HDF5Handler:
                 if level > -1: info_groups.extend(self._explore(item, max_level, level))
         
         indentation = self.indentation * rank
-        group_info = [indentation + f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"]
-        print_list = group_info + info_datasets + info_groups + [indentation + "-" * (self.max_width - len(self.indentation) * rank)]
-        # if rank != 0: print_list = [self.indentation + value for value in print_list]
+        group_info = [
+            indentation + \
+            f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"
+        ]
+        print_list = group_info + info_datasets + info_groups + [
+            indentation + "-" * (self.max_width - len(self.indentation) * rank)
+        ]
         return print_list

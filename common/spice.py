@@ -17,7 +17,7 @@ import pandas as pd
 from dateutil.parser import parse as parse_date
 
 # Personal libraries
-from .ServerConnection import SSHMirroredFilesystem
+from .server_connection import SSHMirroredFilesystem
 
 
 class SpiceUtils:

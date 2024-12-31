@@ -7,7 +7,7 @@ import re
 
 
 
-class stringFormatter:
+class StringFormatter:
     """
     To reformat strings so that they are of a set length.
     """

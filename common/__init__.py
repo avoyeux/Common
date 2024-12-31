@@ -6,10 +6,10 @@ Lastly, there is also some created useful decorators.
 """
 
 # Imports which help for [...]
-from .RE import *  ## [...] the re module/library
-from .HDF5 import *  ## [...] HDF5 file handling
-from .Plot import *  ## [...] the matplotlib library
-from .Dates import *  ## [...] for date reformatting
-from .Decorators import *  ## [...] personal decorators
-from .MultiProcessing import *  ## [...] the multiprocessing library
-from .ArrayManipulation import *  ## [...] manipulation of ndarray
+from .re import *  ## [...] the re module/library
+from .hdf5 import *  ## [...] HDF5 file handling
+from .plot import *  ## [...] the matplotlib library
+from .dates import *  ## [...] for date reformatting
+from .decorators import *  ## [...] personal decorators
+from .multi_processing import *  ## [...] the multiprocessing library
+from .array_manipulation import *  ## [...] manipulation of ndarray

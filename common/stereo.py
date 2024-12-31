@@ -13,7 +13,7 @@ import pandas as pd
 from astropy.io import fits
 
 # Personal libraries
-from .ServerConnection import SSHMirroredFilesystem
+from .server_connection import SSHMirroredFilesystem
 
 
 class StereoUtils:

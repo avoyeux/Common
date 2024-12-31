@@ -12,7 +12,7 @@ import shutil
 from typing import Self  # used to type annotate an instance of a class
 
 # IMPORTS personal
-from .Formatting import stringFormatter
+from .formatting import StringFormatter
 
 
 class HDF5Handler:

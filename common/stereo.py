@@ -17,7 +17,8 @@ from .server_connection import SSHMirroredFilesystem
 
 
 class StereoUtils:
-    """For opening, reading and filtering the STEREO catalogue. Most functions only work when on the .ias.u-psud.fr server.
+    """For opening, reading and filtering the STEREO catalogue. Most functions only work when on
+    the .ias.u-psud.fr server.
 
     Raises:
         ValueError: _description_
@@ -31,31 +32,42 @@ class StereoUtils:
                                          (?P<ID>\d{6})_
                                          (?P<type>n\d+eu[a-zA-Z]).fts
                                          ''', re.VERBOSE)
-    file_directory_path = '/archive/science_data/stereo/lz/L0/b/img/euvi'  # main directory where the STEREO FITS files are
-    flat_path = '/usr/local/ssw/stereo/secchi/calibration/20060823_wav171_fCeuB.fts'  # path to the flat field image albeit useless as just ones.
-    catalogue_path = '/archive/science_data/stereo/lz/L0/b/summary/sccB201207.img.eu'  # path to the STEREO catalogue
+    file_directory_path = '/archive/science_data/stereo/lz/L0/b/img/euvi'  # directory STEREO FITS 
+    flat_path = '/usr/local/ssw/stereo/secchi/calibration/20060823_wav171_fCeuB.fts'  # flat field
+    catalogue_path = '/archive/science_data/stereo/lz/L0/b/summary/sccB201207.img.eu'  # STEREO cat
     
     @staticmethod
-    def read_catalogue(filter_compressed_data: bool = True, lowercase: bool = True, verbose: int = 0, flush: bool = False) -> pd.DataFrame:
+    def read_catalogue(
+            filter_compressed_data: bool = True,
+            lowercase: bool = True,
+            verbose: int = 0,
+            flush: bool = False,
+        ) -> pd.DataFrame:
         """
         To read the STEREO catalogue and output the corresponding pandas.DataFrame object.
 
         Args:
-            filter_compressed_data (bool, optional): Choosing to filter the highly compressed data from the catalogue. From what I was told, these files
+            filter_compressed_data (bool, optional): Choosing to filter the highly compressed data
+                from the catalogue. From what I was told, these files
             are so compressed that they are basically unusable. Defaults to True.
-            lowercase (bool, optional): changes all the pandas.DataFrame headers to lowercase. Defaults to True.
-            verbose (int, optional): defines the level of the prints. 0 means none and the higher the more low level are the prints. Defaults to 0.
+            lowercase (bool, optional): changes all the pandas.DataFrame headers to lowercase.
+                Defaults to True.
+            verbose (int, optional): defines the level of the prints. 0 means none and the higher
+                the more low level are the prints. Defaults to 0.
 
         Returns:
-            pd.DataFrame: the pandas.DataFrame object corresponding to the STEREO catalogue. The headers are (if lower_case=True):
-            'filename', 'dateobs', 'tel', 'exptime', 'xsize', 'ysize', 'filter', 'polar', 'prog', 'osnum', 'dest', 'fps', 'led', 'cmprs', 'nmiss'.
+            pd.DataFrame: the pandas.DataFrame object corresponding to the STEREO catalogue. The
+                headers are (if lower_case=True): 'filename', 'dateobs', 'tel', 'exptime', 'xsize',
+                'ysize', 'filter', 'polar', 'prog', 'osnum', 'dest', 'fps', 'led', 'cmprs',
+                'nmiss'.
         """
         
         # File check
         if os.path.exists(StereoUtils.catalogue_path): 
             catalogue_path = StereoUtils.catalogue_path
         else:
-            if verbose > 0: print("\033[37mSTEREO catalogue not found. Connecting to server ...", flush=flush)
+            if verbose > 0:
+                print("\033[37mSTEREO catalogue not found. Connecting to server ...", flush=flush)
             catalogue_path = SSHMirroredFilesystem.remote_to_local(StereoUtils.catalogue_path)
             if verbose > 0: print("\033[37mSTEREO catalogue fetched\033[0m", flush=flush)
 
@@ -64,11 +76,11 @@ class StereoUtils:
         if lowercase: headers = [header.lower() for header in headers]
     
         df = pd.read_csv(catalogue_path, delimiter='|', skiprows=2, names=headers)
-        df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x) # remove trailing whitespaces in the values 
+        df = df.apply(lambda x: x.str.strip() if x.dtype == 'object' else x)  # rm whitespaces
 
-        if filter_compressed_data: df = df[df['dest'] != 'SW']  # not using the compressed data
+        if filter_compressed_data: df = df[df['dest'] != 'SW']  # not using compressed data
 
-        SSHMirroredFilesystem.cleanup('sameIDLatest')  # removing temporary folder if created
+        SSHMirroredFilesystem.cleanup('sameIDLatest')  # rm temporary folder
         return df.reset_index(drop=True)
 
     @staticmethod
@@ -80,8 +92,8 @@ class StereoUtils:
             filename (str | list[str]): the filename or filenames of stereo files.
 
         Raises:
-            ValueError: when the filename doesn't correspond to the STEREO usual filename. Needed to get the file date (used in 
-            the full path making).
+            ValueError: when the filename doesn't correspond to the STEREO usual filename. Needed
+                to get the file date (used in the full path making).
 
         Returns:
             str | list[str]: the fullpath of the given STEREO filenames.
@@ -112,7 +124,7 @@ class StereoUtils:
             log: bool = True,
             log_lowercut: int = 1
         ) -> np.ndarray:
-        """Not finished yet as I don't remember exactly what needs to be kept and what shouldn't"""
+        #TODO: need to check this function out as some stuff is useless.
         
         if isinstance(filenames, str): 
             filenames = [filenames]

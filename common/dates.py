@@ -5,16 +5,18 @@ To store code related to date formatting.
 
 class CustomDate:
     """
-    To separate the year, month, day, hour, minute, second if a string dateutil.parser.parser doesn't work. 
+    To separate the year, month, day, hour, minute, second if a string dateutil.parser.parser
+    doesn't work. 
     """
 
-    def __init__(self, date_str: str | bytes):
+    def __init__(self, date_str: str | bytes) -> None:
         """
-        Instance to get .year, .month, ... to .second attributes for a given string or bytestring date in the format
-        YYYY-MM-DDThh-mm-ss (str) or YYYY/MM/DD hh:mm:ss (bytes).
+        Instance to get .year, .month, ... to .second attributes for a given string or bytestring
+        date in the format YYYY-MM-DDThh-mm-ss (str) or YYYY/MM/DD hh:mm:ss (bytes).
 
         Args:
-            date_str (str | bytes): the date for which you want the different information as attributes.
+            date_str (str | bytes): the date for which you want the different information as
+                attributes.
         """
         self.year: int
         self.month: int
@@ -42,7 +44,8 @@ class CustomDate:
     
     def parse_date_bytes(self, date_str: bytes) -> None:
         """
-        Separating a bytestring in the format YYYY/MM/DD hh:mm:ss to get the different date attributes.
+        Separating a bytestring in the format YYYY/MM/DD hh:mm:ss to get the different date
+        attributes.
 
         Args:
             date_str (bytes): the date bytestring for which you want to get .year, .month and etc.
@@ -62,14 +65,15 @@ class DatesUtils:
     def days_per_month(year: int) -> list[int]:
         """
         To get how many days are in each month for a specific year (as there are leap years).
-        For ease of use, the indexing values are the same than the corresponding month number. i.e. index 2 will give the number of days in February. Index 0 just
-        outputs 0.
+        For ease of use, the indexing values are the same than the corresponding month number, 
+        i.e. index 2 will give the number of days in February. Index 0 just outputs 0.
 
         Args:
             year (int): the Gregorian calendar year.
 
         Returns:
-            list[int]: list of the days per month with index 0 giving 0, index 1 the days in January, etc.
+            list[int]: list of the days per month with index 0 giving 0, index 1 the days in
+                January, etc.
         """
 
         # Usual days

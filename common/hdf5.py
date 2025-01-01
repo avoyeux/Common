@@ -51,7 +51,7 @@ class HDF5Handler:
         self.max_width: int
         self.all_info: bool
         self.indentation: str
-        self.formatter: stringFormatter
+        self.formatter: StringFormatter
         
         # Miscellaneous attributes
         self.verbose = verbose

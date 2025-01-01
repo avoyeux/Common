@@ -17,15 +17,19 @@ class Plot:
     @staticmethod
     def contours(mask: np.ndarray) -> list[tuple[list[float], list[float]]]:
         """
-        To plot the contours given a mask.  #TODO: need to understand why this code doesn't work if the input array is of type uint8
+        To plot the contours given a mask.
+        #TODO: need to understand why this code doesn't work if the input array is of type uint8.
 
         Args:
-            mask (np.ndarray): a boolean mask representing the mask for which the contours are needed.
+            mask (np.ndarray): a boolean mask representing the mask for which the contours are
+                needed.
 
         Returns:
-            list[tuple[list[float], list[float]]]: list of the tuples representing the y and x coordinates of the contours.  
+            list[tuple[list[float], list[float]]]: list of the tuples representing the y and x
+                coordinates of the contours.  
 
-        Source: https://stackoverflow.com/questions/40892203/can-matplotlib-contours-match-pixel-edges
+        Source:
+        https://stackoverflow.com/questions/40892203/can-matplotlib-contours-match-pixel-edges
         """
 
         pad = np.pad(mask, [(1, 1), (1, 1)])  # zero padding
@@ -43,10 +47,12 @@ class Plot:
         Generator that yields a color value in integer hexadecimal code format.
 
         Returns:
-            typing.Generator[int, None, None]: A generator that yields random integers representing colours in hexadecimal format.
+            typing.Generator[int, None, None]: A generator that yields random integers representing
+                colours in hexadecimal format.
 
         Yields:
-            int: A random integer representing a color in hexadecimal format (in the range [0, 0xFFFFFF)).
+            int: A random integer representing a color in hexadecimal format (in the range
+                [0, 0xFFFFFF)).
         """
 
         while True: yield np.random.randint(0, 0xffffff)

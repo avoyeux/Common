@@ -1,6 +1,6 @@
 #!/usr/bin/env python3.11
 """
-To help when using the HDF5 format. Initial created to have a similar option than the .info() in
+To help when using the HDF5 format. Initially created to have a similar option than the .info() in
 FITS files.
 """
 
@@ -9,10 +9,12 @@ import os
 import h5py
 import shutil
 
+# IMPORTS sub
 from typing import Self  # used to type annotate an instance of a class
 
 # IMPORTS personal
 from .formatting import StringFormatter
+
 
 
 class HDF5Handler:
@@ -20,6 +22,8 @@ class HDF5Handler:
     To add functionalities when opening an HDF5 file (i.e. .h5 files).
     Main added functionality is the .info() which gives the information of a given HDF5 file (kind
     of similar to .info() from astropy.io.fits).
+    There is also the .locate() method that gives back the path(s) to an object inside the file
+    given the object name.
     """
 
     main_default_keys = ['filename', 'creationDate', 'author', 'description']
@@ -87,16 +91,8 @@ class HDF5Handler:
                 f"Error: {e}\033[0m"
             )
      
-        # Returning the class
         filename = os.path.basename(filepath)
         return cls(filename, h5File, verbose, flush)
-            
-    def close(self):
-        """
-        To close the file. From what I was told, it is especially important for HDF5 files.
-        """
-
-        self.file.close()
 
     def info(self, level: int = 10, indentation: str = "| ", all_info: bool = True) -> Self:
         """
@@ -117,20 +113,20 @@ class HDF5Handler:
             Self: returns the instance to allow for chaining if needed.
         """
 
-        # Get terminal width
+        # WIDTH terminal
         max_width = shutil.get_terminal_size().columns
 
-        # Setting some instance attributes
+        # ATTRIBUTES setup
         self.max_width = max_width
         self.all_info = all_info
         self.indentation = indentation
-        self.formatter = stringFormatter(
+        self.formatter = StringFormatter(
             max_length=self.max_width,
             indentation=self.indentation,
             ansi=True,
         )
 
-        # Title centering
+        # TITLE centering
         title = f"HDF5 file '{self.filename}' information"
         title_indentation_len = (max_width // 2) - (len(title) // 2) 
         title_indentation = title_indentation_len * ' ' if title_indentation_len > 0 else ''
@@ -160,14 +156,51 @@ class HDF5Handler:
         
         info += ["\n" + "=" * max_width + "\n"]            
 
-        # Exploring the file
+        # EXPLORE file
         info_extension = self._explore(self.file, level, level)
 
-        # Print creation
+        # PRINT
         info_list = info + info_extension
         print("\n".join(info_list), flush=self.flush)
         return self 
 
+    def locate(self, name: str, is_attribute: bool = False) -> list[str]:
+        """
+        To get the path(s) to an HDF5 Dataset or Group given the name of the object. You can also
+        look for an attribute name if you set 'is_attribute' to True.
+
+        Args:
+            name (str): the name of the Dataset, Group or attribute if 'is_attribute' set to True.
+            is_attribute (bool, optional): When true, the name to locate is a Dataset or Group
+                attribute. Defaults to False.
+
+        Returns:
+            list[str]: the list of the path(s) corresponding to the given name.
+        """
+
+        # PATHS
+        found_paths: list[str] = []
+
+        def find_path(path: str, obj):
+            """
+            Callable needed to use the h5py.visititems(callable) function. The callable is called 
+            on all objects in the HDF5 file.
+
+            Args:
+                path (str): the name (here path) to the object being visited.
+                obj (_type_): the object itself.
+            """
+
+            nonlocal found_paths
+            if not is_attribute:
+                if name in path.split('/'): found_paths.append(path)
+            else:
+                if name in obj.attrs: found_paths.append(path)
+
+        # VISIT file
+        self.file.visititems(find_path)
+        return found_paths
+            
     def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
         """
         Private instance method to explore a given h5py.File or h5py.Group. Returns the information
@@ -182,13 +215,11 @@ class HDF5Handler:
             list[str]: file or group information.
         """
 
-        # Level set up
+        # LEVEL setup
         rank = max_level - level
+        level -= 1   # updating for next run
 
-        # Updating the level
-        level -= 1
-
-        # Exploration setup
+        # EXPLORATION setup
         nb_groups = 0
         nb_datasets = 0
         info_groups = []
@@ -197,7 +228,7 @@ class HDF5Handler:
         # Exploring
         for key, item in group.items():
 
-            # Information setup
+            # INFO setup
             item_info = [
                 string 
                 for key in self.sub_default_keys
@@ -219,7 +250,7 @@ class HDF5Handler:
                     )
                 ]
             
-            # Checking the type
+            # CHECK type
             if isinstance(item, h5py.Dataset):
                 info_datasets.extend(
                     self.formatter.reformat_string(
@@ -256,3 +287,10 @@ class HDF5Handler:
             indentation + "-" * (self.max_width - len(self.indentation) * rank)
         ]
         return print_list
+        
+    def close(self):
+        """
+        To close the file. From what I was told, it is especially important for HDF5 files.
+        """
+
+        self.file.close()

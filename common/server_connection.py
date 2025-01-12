@@ -9,6 +9,8 @@ import time
 import shutil
 import tempfile
 import subprocess
+
+# IMPORTS alias
 import multiprocessing as mp
 
 
@@ -136,7 +138,7 @@ class SSHMirroredFilesystem:
         while time.time() - start_time < self.timeout:
             if os.path.exists(self.ctrl_socket_filepath): return True  # connection established.
 
-            # Bash errors
+            # ERRORs bash
             if process.poll() is not None:  # i.e. process finished
                 error_message = process.stderr.read().decode()
                 if error_message:
@@ -168,14 +170,14 @@ class SSHMirroredFilesystem:
             str | list[str]: the created local filepaths.
         """
 
-        # Setup        
+        # SETUP        
         if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
         remote_filepaths_str = ' '.join(remote_filepaths)
 
-        # Creating a temporary subdirectory
+        # TEMP folder
         folder_path = self._sub_creation()
 
-        # Bash command
+        # COMMAND bash
         tar_creation_command = (
             f'tar c{self.compression}f - --absolute-names {remote_filepaths_str}'
         )
@@ -188,10 +190,10 @@ class SSHMirroredFilesystem:
             f"| {tar_extraction_command}"
         ) 
 
-        # OS check
+        # CHECK OS
         if SSHMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
 
-        # Bash run
+        # RUN bash
         process = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
     
         # Errors

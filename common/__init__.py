@@ -9,7 +9,8 @@ functions. Lastly, there is also some created useful decorators.
 from .re import *  ## [...] the re module/library
 from .hdf5 import *  ## [...] HDF5 file handling
 from .plot import *  ## [...] the matplotlib library
-from .dates import *  ## [...] for date reformatting
+from .dates import *  ## [...] date reformatting
 from .decorators import *  ## [...] personal decorators
+from .main_paths import *  ## [...] getting the project root path
 from .multi_processing import *  ## [...] the multiprocessing library
 from .array_manipulation import *  ## [...] manipulation of ndarray

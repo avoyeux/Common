@@ -36,4 +36,4 @@ def get_root_path() -> str:
     return root_directory
 
 # CREATE rootpath
-root_path = fet_root_path()
+root_path = get_root_path()

@@ -27,7 +27,7 @@ def get_root_path() -> str:
     if root_env != base_python:
 
         # ENV at main directory
-        root_directory = root_env
+        root_directory = os.path.join(root_env, '..')
     # ENV base Python
     else:
         # ROOT 2 directories back

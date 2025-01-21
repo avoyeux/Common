@@ -15,6 +15,8 @@ from typing import Self  # used to type annotate an instance of a class
 # IMPORTS personal
 from .formatting import StringFormatter
 
+# todo in .info() need to add the option to be able to omit some group/dataset names or keep some.
+
 
 
 class HDF5Handler:

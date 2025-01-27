@@ -3,12 +3,14 @@
 Has decorators that I regularly use.
 """
 
-# IMPORTS
+# IMPORTs
 import inspect
-# Aliases
+import functools
+
+# IMPORTs alias
 import numpy as np
-# Sub imports
-from functools import wraps
+
+# IMPORTs sub
 from time import time, ctime
 from typeguard import typechecked
 from typing import Type, Callable, TypeVar
@@ -215,7 +217,7 @@ class DecoratorsUtils:
             F: the decorated function.
         """
 
-        @wraps(func)
+        @functools.wraps(func)
         def wrapper(*args: any, **kwargs: any) -> any:
             """
             The usual wrapper for decorators.
@@ -305,7 +307,7 @@ class DecoratorsUtils:
             flush: bool,
         ) -> F:
         
-        @wraps(func)
+        @functools.wraps(func)
         def wrapper(*args: any, **kwargs: any) -> any:
             #TODO: copy the docstring for the other wrapper.
 

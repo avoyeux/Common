@@ -221,7 +221,7 @@ class SSHMirroredFilesystem:
         if not os.path.exists(self.ctrl_socket_filepath): return
 
         # Command
-        bash_command = f'ssh -S {self.ctrl_socket_filepath} -O exit sol',
+        bash_command = f'ssh -S {self.ctrl_socket_filepath} -O exit sol'
     
         # OS check
         if SSHMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command

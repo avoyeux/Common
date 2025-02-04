@@ -13,19 +13,20 @@ import numpy as np
 # IMPORTs sub
 from time import time, ctime
 from typeguard import typechecked
-from typing import Type, Callable, TypeVar
+from typing import Type, Callable, TypeVar, cast, overload, Any
 
 # PUBLIC API
 __all__ = ['ClassDecorator', 'Decorators']
 
 # General function and decorator types
-F = TypeVar('F', bound=Callable[..., any])
+F = TypeVar('F', bound=Callable[..., Any])
 D = Callable[[F], any]
+T = TypeVar('T', bound=Type)
 
 
 
 @typechecked
-def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[F], F]:
+def ClassDecorator(decorator: D, functiontype: T | str = 'all') -> Callable[[T], T]:
     """
     Class decorator that applies a given decorator to class functions with the specified function
     type (i.e. classmethod, staticmethod, property, 'regular' or 'instance' -- for an instance
@@ -50,7 +51,7 @@ def ClassDecorator(decorator: D, functiontype: F | str = 'all') -> Callable[[F],
             "Choose 'regular', 'instance', or 'all'"
         )
 
-    def class_rebuilder(cls) -> Type:
+    def class_rebuilder(cls: T) -> T:
         """
         Rebuilds the class adding the new decorators.
 
@@ -79,13 +80,25 @@ class Decorators:
     """
     To store useful function decorators that I created.
     """
-    #TODO: add decorator that prints all inputs.
+    # todo add decorator that prints all inputs.
+
+    @overload
+    @staticmethod
+    def running_time(func: F) -> F: ...
+
+    @overload
+    @staticmethod
+    def running_time(
+        *, verbose_name: str = 'verbose', flush_name: str = 'flush'
+    ) -> Callable[[F], F]: ...
     
     @staticmethod  
     def running_time(
-            verbose_name: F | str = 'verbose',
+            func: F | None = None,
+            *,
+            verbose_name: str = 'verbose',
             flush_name: str = 'flush',
-        ) -> Callable[[F], F]:
+        ) -> F | Callable[[F], F]:
         """
         The 'shell' of the Decorators.Utils._actual_running_time_decorator decorator function. This
         shell was created to decide when a decorator factory needs to be used (i.e. when arguments
@@ -109,11 +122,7 @@ class Decorators:
         """
 
         # CHECK running_time used without (): (function passed directly without ())
-        if callable(verbose_name):
-            
-            # Setting verbose_name as the actual function to be decorated
-            func = verbose_name
-            verbose_name = 'verbose'
+        if func is not None and callable(func):
             return DecoratorsUtils.actual_running_time_decorator(func, verbose_name, flush_name)
         
         # If arguments are passed or empty brackets are used, i.e. @Decorators.running_time()
@@ -218,7 +227,7 @@ class DecoratorsUtils:
         """
 
         @functools.wraps(func)
-        def wrapper(*args: any, **kwargs: any) -> any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             """
             The usual wrapper for decorators.
 
@@ -266,7 +275,7 @@ class DecoratorsUtils:
                         flush=flush,
                     )                 
             return result
-        return wrapper
+        return cast(F, wrapper)
 
     @staticmethod
     def _format_time_seconds(seconds: int | float) -> str:
@@ -308,7 +317,7 @@ class DecoratorsUtils:
         ) -> F:
         
         @functools.wraps(func)
-        def wrapper(*args: any, **kwargs: any) -> any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             #TODO: copy the docstring for the other wrapper.
 
             # Get signature

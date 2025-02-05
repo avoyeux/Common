@@ -89,7 +89,7 @@ class HDF5Handler:
 
         except Exception as e:
             raise Exception(
-                f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file."
+                f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file.\n"
                 f"Error: {e}\033[0m"
             )
      

@@ -2,6 +2,7 @@
 !requirements.txt
 !/common/
 !/tests/
+!batch_template.sh
 !*.py
 !.gitignore
 

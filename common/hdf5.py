@@ -10,10 +10,13 @@ import h5py
 import shutil
 
 # IMPORTS sub
-from typing import Self  # used to type annotate an instance of a class
+from typing import Self
 
 # IMPORTS personal
 from .formatting import StringFormatter
+
+# API public
+__all__ = ['HDF5Handler']
 
 # todo in .info() need to add the option to be able to omit some group/dataset names or keep some.
 
@@ -27,9 +30,6 @@ class HDF5Handler:
     There is also the .locate() method that gives back the path(s) to an object inside the file
     given the object name.
     """
-
-    main_default_keys = ['filename', 'creationDate', 'author', 'description']
-    sub_default_keys = ['unit', 'description']
 
     def __init__(self, filename: str, HDF5File: h5py.File, verbose: int, flush: bool) -> None:
         """
@@ -49,17 +49,11 @@ class HDF5Handler:
                 is outputted exactly when it is called (usually not the case when multiprocessing).
         """
         
-        # Non-optional instance attributes
-        self.filename = filename
+        # ARGUMENTs non-optional
         self.file = HDF5File
-
-        # Placeholders 
-        self.max_width: int
-        self.all_info: bool
-        self.indentation: str
-        self.formatter: StringFormatter
+        self.filename = filename
         
-        # Miscellaneous attributes
+        # ATTRIBUTEs miscellaneous
         self.verbose = verbose
         self.flush = flush
 
@@ -95,76 +89,62 @@ class HDF5Handler:
      
         filename = os.path.basename(filepath)
         return cls(filename, h5File, verbose, flush)
-
-    def info(self, level: int = 10, indentation: str = "| ", all_info: bool = True) -> Self:
+    
+    def info(
+            self,
+            level: int = 10,
+            shape: bool = True,
+            dtype: bool = True,
+            all_info: bool = True,
+            disk_size: bool = False,
+            indentation: str = '| ',
+            memory_size: bool = True,
+            compression: bool = False,
+        ) -> Self:
         """
-        To print the general metadata and data information on the HDF5 file. Had the inspiration
-        from the .info() method from astropy.io.fits
+        To print the information contained inside the HDF5 file. The precision of the printed
+        information will depend on the arguments given.
 
         Args:
-            level (int, optional): decides the max level of the information to be printed out. 
-                If 0 only gives the information on the main Datasets and Groups. 1 goes one level
+            level (int, optional): decides the max level of the information to be printed out. If 0
+                only gives the information on the main Datasets and Groups. 1 goes one level
                 further down the hierarchy and vice versa. Defaults to 10.
-            indentation (str, optional): sets the indentation added every time you go down a level
-                in the file hierarchy. Defaults to "| ". 
-            all_info (bool, optional): choosing to print all the attributes. If False, only the
-                default attributes given by the two class level attributes are printed out.
+            shape (bool, optional): deciding to print the shape of each dataset. Defaults to True.
+            dtype (bool, optional): deciding to print the dtype of each dataset. Defaults to True.
+            all_info (bool, optional): deciding to print all the attributes. If False, only the
+                default attributes given by the two class level attributes
+                (of HDF5PrintInformation) are printed out. Defaults to True.
+            disk_size (bool, optional): deciding to print the disk size of each dataset.
+                Defaults to False.
+            indentation (str, optional): decides the indentation added every time you go down a
+                level. Defaults to '| '.
+            memory_size (bool, optional): deciding to print the memory size of each dataset.
                 Defaults to True.
+            compression (bool, optional): deciding to print the compression type for each dataset.
+                Defaults to False.
 
         Returns:
-            Self: returns the instance to allow for chaining if needed.
+            Self: the class itself.
         """
 
-        # WIDTH terminal
-        max_width = shutil.get_terminal_size().columns
-
-        # ATTRIBUTES setup
-        self.max_width = max_width
-        self.all_info = all_info
-        self.indentation = indentation
-        self.formatter = StringFormatter(
-            max_length=self.max_width,
-            indentation=self.indentation,
-            ansi=True,
+        # INITIALIZATION
+        print_information = HDF5PrintInformation(
+            level=level,
+            shape=shape,
+            dtype=dtype,
+            verbose=self.verbose,
+            filename=self.filename,
+            all_info=all_info,
+            disk_size=disk_size,
+            indentation=indentation,
+            memory_size=memory_size,
+            compression=compression,
+            HDF5File=self.file,
         )
 
-        # TITLE centering
-        title = f"HDF5 file '{self.filename}' information"
-        title_indentation_len = (max_width // 2) - (len(title) // 2) 
-        title_indentation = title_indentation_len * ' ' if title_indentation_len > 0 else ''
-
-        info = [
-            "\n" + "=" * max_width + "\n",
-            title_indentation + f"\033[1m{title}\n\033[0m",
-        ] + [
-            string
-            for key in HDF5Handler.main_default_keys
-            for string in self.formatter.reformat_string(
-                string=str(self.file.attrs.get(key, f'No {key}')),
-                prefix=f"\033[92m{key}:\033[0m ",
-            )
-        ]
-
-        if all_info:
-            info += [
-                string 
-                for key in self.file.attrs.keys()
-                if key not in HDF5Handler.main_default_keys
-                for string in self.formatter.reformat_string(
-                    string=str(self.file.attrs[key]),
-                    prefix=f"\033[92m{key}:\033[0m ",
-                )
-            ]
-        
-        info += ["\n" + "=" * max_width + "\n"]            
-
-        # EXPLORE file
-        info_extension = self._explore(self.file, level, level)
-
         # PRINT
-        info_list = info + info_extension
-        print("\n".join(info_list), flush=self.flush)
-        return self 
+        print(print_information, flush=self.flush)
+        return self
 
     def locate(self, name: str, is_attribute: bool = False) -> list[str]:
         """
@@ -202,15 +182,150 @@ class HDF5Handler:
         # VISIT file
         self.file.visititems(find_path)
         return found_paths
+    
+    def close(self) -> None:
+        """
+        To close the file. From what I was told, it is especially important for HDF5 files.
+        """
+
+        self.file.close()
+
+
+class HDF5PrintInformation:
+    """
+    To print the information of a given HDF5 file. The main method is the .info() method.
+    """
+
+    main_default_keys = ['filename', 'creationDate', 'author', 'description']
+    sub_default_keys = ['unit', 'description']
+
+    def __init__(
+            self,
+            level: int,
+            shape: bool,
+            dtype: bool,
+            verbose: int,
+            filename: str,
+            all_info: bool,
+            disk_size: bool,
+            indentation: str,
+            memory_size: bool,
+            compression: bool,
+            HDF5File: h5py.File,
+        ) -> None:
+        """
+        To print the information of a given HDF5 file. The main method is the .info() method.
+
+        Args:
+            level (int): decides the max level of the information to be printed out. If 0 only
+                gives the information on the main Datasets and Groups. 1 goes one level further
+                down the hierarchy and vice versa.
+            verbose (int): decides the level of the prints. The higher the number, the more prints.
+            filename (str): filename of the given HDF5 file.
+            all_info (bool): choosing to print all the attributes. If False, only the default
+                attributes given by the two class level attributes are printed out.
+            indentation (str): sets the indentation added every time you go down a level in the
+                file hierarchy.
+            HDF5File (h5py.File): the HDF5 file open in read mode.
+            shape (bool): deciding to print the shape of each dataset when using the .info()
+                instance method.
+            dtype (bool): deciding to print the dtype of each dataset when using the .info()
+                instance method.
+            disk_size (bool): deciding to print the disk size of each dataset when using the
+                .info() instance method.
+            memory_size (bool): deciding to print the memory size of each dataset when using the
+                .info() instance method.
+            compression (bool): deciding to print the compression type for each dataset when using
+                the .info() instance method.
+        """
+
+        # ARGUMENTs non-optional
+        self.level = level
+        self.verbose = verbose
+        self.filename = filename
+        self.all_info = all_info
+        self.indentation = indentation
+        self.HDF5File = HDF5File
+
+        # ARGUMENTs optional
+        self.shape = shape
+        self.dtype = dtype
+        self.disk_size = disk_size
+        self.memory_size = memory_size
+        self.compression = compression
+
+        # ATTRIBUTEs new
+        self.max_width = shutil.get_terminal_size().columns
+        self.formatter = StringFormatter(
+            max_length=self.max_width,
+            indentation=self.indentation,
+            ansi=True,
+        )
+
+    def info(self) -> list[str]:
+        """
+        To print the general metadata and data information on the HDF5 file. Had the inspiration
+        from the .info() method from astropy.io.fits.
+
+        Returns:
+            list[str]: the information of the HDF5 file.
+        """
+
+        # TITLE centering
+        title = f"HDF5 file '{self.filename}' information"
+        title_indentation_len = (self.max_width // 2) - (len(title) // 2) 
+        title_indentation = title_indentation_len * ' ' if title_indentation_len > 0 else ''
+
+        info = [
+            "\n" + "=" * self.max_width + "\n",
+            title_indentation + f"\033[1m{title}\n\033[0m",
+        ] + [
+            string
+            for key in self.main_default_keys
+            for string in self.formatter.reformat_string(
+                string=str(self.HDF5File.attrs.get(key, f'No {key}')),
+                prefix=f"\033[92m{key}:\033[0m ",
+            )
+        ]
+
+        if self.all_info:
+            info += [
+                string 
+                for key in self.HDF5File.attrs.keys()
+                if key not in self.main_default_keys
+                for string in self.formatter.reformat_string(
+                    string=str(self.HDF5File.attrs[key]),
+                    prefix=f"\033[92m{key}:\033[0m ",
+                )
+            ]
+        
+        info += ["\n" + "=" * self.max_width + "\n"]            
+
+        # EXPLORE file
+        info_extension = self._explore(self.HDF5File, self.level)
+
+        # PRINT
+        return info + info_extension
+
+    def __str__(self) -> str:
+        """
+        To return the information of the HDF5 file as a string.
+
+        Returns:
+            str: the information of the HDF5 file as a string.
+        """
+        
+        # INFORMATION setup
+        info_list = self.info()
+        return "\n".join(info_list)
             
-    def _explore(self, group: h5py.File | h5py.Group, max_level: int, level: int) -> list[str]:
+    def _explore(self, group: h5py.File | h5py.Group, level: int) -> list[str]:
         """
         Private instance method to explore a given h5py.File or h5py.Group. Returns the information
         in a list of strings.
 
         Args:
             group (h5py.File | h5py.Group): the HDF5 file or one of it's given groups to explore.
-            max_level (int): the initial level chosen for the 'level' argument of info(). 
             level (int): the level where we are. Starts from max_level to 0.
 
         Returns:
@@ -218,16 +333,16 @@ class HDF5Handler:
         """
 
         # LEVEL setup
-        rank = max_level - level
-        level -= 1   # updating for next run
+        rank = self.level - level
+        level -= 1   # next run update
 
         # EXPLORATION setup
         nb_groups = 0
-        nb_datasets = 0
+        dataset_nb = 0
         info_groups = []
         info_datasets = []
 
-        # Exploring
+        # EXPLORE
         for key, item in group.items():
 
             # INFO setup
@@ -256,14 +371,11 @@ class HDF5Handler:
             if isinstance(item, h5py.Dataset):
                 info_datasets.extend(
                     self.formatter.reformat_string(
-                        string=(
-                            f"\033[1;35mDataset {nb_datasets}: \033[97m{key}\033[0m"
-                            f" (shape: {item.shape}, dtype: '{item.dtype}')"
-                        ),
+                        string=self._define_dataset(item, key, dataset_nb),
                         rank=rank,
                     ) + item_info
                 )
-                nb_datasets += 1
+                dataset_nb += 1
             
             elif isinstance(item, h5py.Group):
                 info_groups.extend(
@@ -278,21 +390,80 @@ class HDF5Handler:
                 nb_groups += 1
 
                 # DEEPER 
-                if level > -1: info_groups.extend(self._explore(item, max_level, level))
+                if level > -1: info_groups.extend(self._explore(item, level))
         
         indentation = self.indentation * rank
         group_info = [
             indentation + \
-            f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {nb_datasets} dataset(s)\033[0m"
+            f"\033[1;90mlvl{rank}: {nb_groups} group(s) and {dataset_nb} dataset(s)\033[0m"
         ]
         print_list = group_info + info_datasets + info_groups + [
             indentation + "-" * (self.max_width - len(self.indentation) * rank)
         ]
         return print_list
-        
-    def close(self):
+    
+    def _define_dataset(self, dataset: h5py.Dataset, dataset_name: str, dataset_nb: int) -> str:
         """
-        To close the file. From what I was told, it is especially important for HDF5 files.
+        To define the string to print for a given dataset.
+
+        Args:
+            dataset (h5py.Dataset): the dataset to define.
+            dataset_name (str): the name of the dataset.
+            dataset_nb (int): the id inside the group corresponding to the dataset.
+
+        Returns:
+            str: the definition of the dataset.
         """
 
-        self.file.close()
+        string = f"\033[1;35mDataset {dataset_nb}: \033[97m{dataset_name}\033[0m ("
+
+        if self.shape:
+            shape = dataset.shape
+            if shape != ():
+                string += f"shape: {shape}, "
+            else:
+                string += f"value: {dataset[...]}, "
+
+        if self.dtype: string += f"dtype: '{dataset.dtype}', "
+
+        if self.compression:
+            compression = dataset.compression
+            compression_lvl = dataset.compression_opts
+
+            if compression is None:
+                string += f"compression: None, "
+            else:
+                string += f"compression(lvl{compression_lvl}): {compression}, "
+            
+        if self.disk_size:
+            string += f"disk size: {self._memory_to_human(dataset.id.get_storage_size())}, "
+
+        if self.memory_size: string += f"memory size: {self._memory_to_human(dataset.nbytes)}, "
+
+        # CLEANUP
+        cleaned_up = string.rstrip(" (").rstrip(", ") + ")"
+        return cleaned_up
+    
+    def _memory_to_human(self, nbytes: int) -> str:
+        """
+        To convert the number of bytes to a human readable string.
+
+        Args:
+            nbytes (int): the number of bytes of the dataset.
+
+        Returns:
+            str: the number of bytes in human readable format.
+        """
+
+        # FORMATTING
+        kb, _ = divmod(nbytes, 1024)
+        mb, _ = divmod(kb, 1024)
+        gb, _ = divmod(mb, 1024)
+        tb, _ = divmod(gb, 1024)
+
+        # RETURN    
+        if tb > 2: return f"{tb}TB"
+        if gb > 2: return f"{gb}GB"
+        if mb > 2: return f"{mb}MB"
+        if kb > 2: return f"{kb}KB"
+        return f"{nbytes}B"

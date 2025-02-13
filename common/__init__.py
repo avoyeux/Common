@@ -14,3 +14,10 @@ from .decorators import *  ## [...] personal decorators
 from .main_paths import *  ## [...] getting the project root path
 from .multi_processing import *  ## [...] the multiprocessing library
 from .array_manipulation import *  ## [...] manipulation of ndarray
+
+
+# todo need to think about how to clean up error messages so that the messages from my decorator
+# don't show up
+
+# todo need to add a function that prints the memory usage
+# todo when done maybe add it to the running time decorator 

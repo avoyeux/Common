@@ -436,34 +436,13 @@ class HDF5PrintInformation:
                 string += f"compression(lvl{compression_lvl}): {compression}, "
             
         if self.disk_size:
-            string += f"disk size: {self._memory_to_human(dataset.id.get_storage_size())}, "
+            string += (
+                f"disk size: {self.formatter.nbytes_to_human(dataset.id.get_storage_size())}, "
+            )
 
-        if self.memory_size: string += f"memory size: {self._memory_to_human(dataset.nbytes)}, "
+        if self.memory_size: 
+            string += f"memory size: {self.formatter.nbytes_to_human(dataset.nbytes)}, "
 
         # CLEANUP
         cleaned_up = string.rstrip(" (").rstrip(", ") + ")"
         return cleaned_up
-    
-    def _memory_to_human(self, nbytes: int) -> str:
-        """
-        To convert the number of bytes to a human readable string.
-
-        Args:
-            nbytes (int): the number of bytes of the dataset.
-
-        Returns:
-            str: the number of bytes in human readable format.
-        """
-
-        # FORMATTING
-        kb, _ = divmod(nbytes, 1024)
-        mb, _ = divmod(kb, 1024)
-        gb, _ = divmod(mb, 1024)
-        tb, _ = divmod(gb, 1024)
-
-        # RETURN    
-        if tb > 2: return f"{tb}TB"
-        if gb > 2: return f"{gb}GB"
-        if mb > 2: return f"{mb}MB"
-        if kb > 2: return f"{kb}KB"
-        return f"{nbytes}B"

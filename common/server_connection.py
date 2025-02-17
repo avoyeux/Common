@@ -13,6 +13,9 @@ import subprocess
 # IMPORTS alias
 import multiprocessing as mp
 
+# IMPORTS sub
+from typing import overload
+
 
 
 class SSHMirroredFilesystem:
@@ -148,6 +151,12 @@ class SSHMirroredFilesystem:
             time.sleep(0.1)
         return False
 
+    @overload
+    def mirror(self, remote_filepaths: str, strip_level: int = 2) -> str: ...
+
+    @overload
+    def mirror(self, remote_filepaths: list[str], strip_level: int = 2) -> list[str]: ...
+
     def mirror(self, remote_filepaths: str | list[str], strip_level: int = 2) -> str | list[str]:
         """
         Given server filepath(s), it returns the corresponding filepath(s) to the file(s) now in
@@ -238,6 +247,24 @@ class SSHMirroredFilesystem:
                     f"Error: {error_message}\033[0m",
                     flush=self.flush,
                 )
+
+    @overload
+    @staticmethod
+    def remote_to_local(
+        remote_filepaths: str,
+        host_shortcut: str = 'sol',
+        compression: str = 'z',
+        strip_level: int = 2,
+    ) -> str: ...
+
+    @overload
+    @staticmethod
+    def remote_to_local(
+        remote_filepaths: list[str],
+        host_shortcut: str = 'sol',
+        compression: str = 'z',
+        strip_level: int = 2,
+    ) -> list[str]: ...
 
     @staticmethod
     def remote_to_local(

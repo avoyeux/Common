@@ -12,6 +12,7 @@ from .plot import *  ## [...] the matplotlib library
 from .dates import *  ## [...] date reformatting
 from .decorators import *  ## [...] personal decorators
 from .main_paths import *  ## [...] getting the project root path
+from .yaml_utils import *  ## [...] yaml file handling
 from .multi_processing import *  ## [...] the multiprocessing library
 from .array_manipulation import *  ## [...] manipulation of ndarray
 

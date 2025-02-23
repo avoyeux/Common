@@ -1,8 +1,15 @@
+# BLACKLIST all
 *
-!requirements.txt
+
+# WHITELIST dirs
 !/common/
 !/tests/
-!batch_template.sh
-!*.py
-!.gitignore
 
+# WHITELIST types
+!*.py
+!**/*.py
+!**/*.sh
+
+# WHITELIST files
+!.gitignore
+!.requirements.txt

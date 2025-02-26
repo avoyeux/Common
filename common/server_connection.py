@@ -152,10 +152,10 @@ class SSHMirroredFilesystem:
         return False
 
     @overload
-    def mirror(self, remote_filepaths: str, strip_level: int = 2) -> str: ...
+    def mirror(self, remote_filepaths: str, strip_level: int = ...) -> str: ...
 
     @overload
-    def mirror(self, remote_filepaths: list[str], strip_level: int = 2) -> list[str]: ...
+    def mirror(self, remote_filepaths: list[str], strip_level: int = ...) -> list[str]: ...
 
     def mirror(self, remote_filepaths: str | list[str], strip_level: int = 2) -> str | list[str]:
         """
@@ -252,18 +252,18 @@ class SSHMirroredFilesystem:
     @staticmethod
     def remote_to_local(
         remote_filepaths: str,
-        host_shortcut: str = 'sol',
-        compression: str = 'z',
-        strip_level: int = 2,
+        host_shortcut: str = ...,
+        compression: str = ...,
+        strip_level: int = ...,
     ) -> str: ...
 
     @overload
     @staticmethod
     def remote_to_local(
         remote_filepaths: list[str],
-        host_shortcut: str = 'sol',
-        compression: str = 'z',
-        strip_level: int = 2,
+        host_shortcut: str = ...,
+        compression: str = ...,
+        strip_level: int = ...,
     ) -> list[str]: ...
 
     @staticmethod

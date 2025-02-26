@@ -89,7 +89,9 @@ class Decorators:
     @overload
     @staticmethod
     def running_time(
-        *, verbose_name: str = 'verbose', flush_name: str = 'flush'
+        *,
+        verbose_name: str = ...,
+        flush_name: str = ...,
     ) -> Callable[[F], F]: ...
     
     @staticmethod  

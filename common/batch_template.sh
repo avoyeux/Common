@@ -13,6 +13,7 @@
 #SBATCH --nodes=1          # Number of nodes
 #SBATCH --mem=10Gb         # Memory
 #SBATCH --ntasks-per-node=4 
+##SBATCH --time=0-01:00     # Time before the job stops running in days-hours:minutes
 
 # Work directory set as file directory
 SCRIPT_DIR=$(dirname "$(realpath "$0")")

@@ -30,10 +30,14 @@ class DictToObj:
             dictionary (dict): the dictionary to change to a class instance.
         """
 
+        # DICTKEYs as attributes
         for key, value in dictionary.items():
             setattr(self, key, DictToObj(value) if isinstance(value, dict) else value)
 
+        # ROOT_path add
+        setattr(self, "root_path", root_path)
 
+    
 class ConfigToObject:
     """
     To convert the config.yml file information to an instance of the class.

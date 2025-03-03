@@ -254,7 +254,7 @@ class DecoratorsUtils:
             START_time = time()
             if verbose > 0: 
                 print(
-                    f"\033[94m{func.__name__} started on {ctime(START_time)}.\033[0m",
+                    f"\033[94m{func.__qualname__} started on {ctime(START_time)}.\033[0m",
                     flush=flush,
                 )
 
@@ -262,7 +262,7 @@ class DecoratorsUtils:
                 result = func(*args, **kwargs)
             except Exception as e:
                 raise Exception(
-                    f"\033[1;31mFunction {func.__name__} didn't run properly."
+                    f"\033[1;31mFunction {func.__qualname__} didn't run properly."
                     f"The corresponding error is: {e}\033[0m"
                 )
             finally:
@@ -272,7 +272,7 @@ class DecoratorsUtils:
                 time_string = DecoratorsUtils._format_time_seconds(DIF_time)
                 if verbose > 0:
                     print(
-                        f"\033[92m{func.__name__} ended on {ctime(END_time)} ({time_string})."
+                        f"\033[92m{func.__qualname__} ended on {ctime(END_time)} ({time_string})."
                         "\033[0m",
                         flush=flush,
                     )                 
@@ -329,16 +329,16 @@ class DecoratorsUtils:
             bound_args = signature.bind(*args, **kwargs)
             if defaults: bound_args.apply_defaults()
 
-            print(f'\033[1;0m{func.__name__}\033[1;35m arguments are:')
+            print(f'\033[1;0m{func.__qualname__}\033[1;35m arguments are:')
             for name, item in bound_args.arguments.items():
                 DecoratorsUtils._printing_options(name, item, type_, value, shape, size, flush)
             return func(*args, **kwargs)
-        return wrapper
+        return cast(F, wrapper)
 
     @staticmethod
     def _printing_options(
             name: str,
-            item: any,
+            item: Any,
             type_: bool,
             value: bool,
             shape: bool,

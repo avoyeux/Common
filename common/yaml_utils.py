@@ -13,7 +13,7 @@ from typing import Any
 from .main_paths import root_path
 
 # API public
-__all__ = ['config']
+__all__ = ['ConfigToObject', 'config']
 
 
 
@@ -34,22 +34,26 @@ class DictToObj:
         for key, value in dictionary.items():
             setattr(self, key, DictToObj(value) if isinstance(value, dict) else value)
 
-        # ROOT_path add
-        setattr(self, "root_path", root_path)
-
     
 class ConfigToObject:
     """
     To convert the config.yml file information to an instance of the class.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, config_path: str | None = None) -> None:
         """
         To convert the config.yml file information to an instance of the class.
+        
+        Args:
+            config_path (str, optional): the path to the config file. When None, the config file
+                is at the root_path and called 'config.yml'. Defaults to None.
         """
 
         # CONFIG open
-        filepath = os.path.join(root_path, "config.yml")
+        if config_path is not None:
+            filepath = config_path
+        else:
+            filepath = os.path.join(root_path, "config.yml")
         config = self.get_config(filepath)
 
         # OBJECT from dict
@@ -72,7 +76,26 @@ class ConfigToObject:
         """
         
         str_list = loader.construct_sequence(node)
+        str_list = [value if isinstance(value, str) else "" for value in str_list]
         return os.path.join(*str_list)
+    
+    def  rootpath_constructor(
+            self,
+            loader: yaml.loader.SafeLoader,
+            node: yaml.nodes.ScalarNode,
+        ) -> str:
+        """
+        To dynamically set the root_path value in the config file.
+
+        Args:
+            loader (yaml.loader.SafeLoader): the YAML loader that processes the file.
+            node (yaml.nodes.ScalarNode): a YAML scalar node containing the root_path value.
+
+        Returns:
+            str: the root_path value.
+        """
+
+        return root_path
 
     def get_config(self, filepath: str) -> dict[str, Any]:
         """
@@ -87,6 +110,7 @@ class ConfigToObject:
 
         # CONSTRUCTOR add
         yaml.SafeLoader.add_constructor("!join", self.join_constructor)
+        yaml.SafeLoader.add_constructor("!rootpath", self.rootpath_constructor)
 
         with open(filepath, 'r') as conf: config = yaml.load(conf, Loader=yaml.SafeLoader)
         return config

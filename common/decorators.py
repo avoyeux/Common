@@ -88,12 +88,17 @@ class Decorators:
 
     @overload
     @staticmethod
+    def running_time(*, verbose_name: str = ..., flush_name: str = ...) -> Callable[[F], F]: ...
+
+    @overload  # fallback
+    @staticmethod
     def running_time(
-        *,
-        verbose_name: str = ...,
-        flush_name: str = ...,
-    ) -> Callable[[F], F]: ...
-    
+            func: F | None = None,
+            *,
+            verbose_name: str = 'verbose',
+            flush_name: str = 'flush',
+        ) -> F | Callable[[F], F]: ...
+
     @staticmethod  
     def running_time(
             func: F | None = None,

@@ -157,6 +157,13 @@ class SSHMirroredFilesystem:
     @overload
     def mirror(self, remote_filepaths: list[str], strip_level: int = ...) -> list[str]: ...
 
+    @overload # fallback
+    def mirror(
+            self,
+            remote_filepaths: str | list[str],
+            strip_level: int = ...,
+        ) -> str | list[str]: ...
+
     def mirror(self, remote_filepaths: str | list[str], strip_level: int = 2) -> str | list[str]:
         """
         Given server filepath(s), it returns the corresponding filepath(s) to the file(s) now in
@@ -251,20 +258,29 @@ class SSHMirroredFilesystem:
     @overload
     @staticmethod
     def remote_to_local(
-        remote_filepaths: str,
-        host_shortcut: str = ...,
-        compression: str = ...,
-        strip_level: int = ...,
-    ) -> str: ...
+            remote_filepaths: str,
+            host_shortcut: str = ...,
+            compression: str = ...,
+            strip_level: int = ...,
+        ) -> str: ...
 
     @overload
     @staticmethod
     def remote_to_local(
-        remote_filepaths: list[str],
-        host_shortcut: str = ...,
-        compression: str = ...,
-        strip_level: int = ...,
-    ) -> list[str]: ...
+            remote_filepaths: list[str],
+            host_shortcut: str = ...,
+            compression: str = ...,
+            strip_level: int = ...,
+        ) -> list[str]: ...
+
+    @overload # fallback
+    @staticmethod
+    def remote_to_local(
+            remote_filepaths: str | list[str],
+            host_shortcut: str = ...,
+            compression: str = ...,
+            strip_level: int = ...,
+        ) -> str | list[str]: ...
 
     @staticmethod
     def remote_to_local(
@@ -272,7 +288,7 @@ class SSHMirroredFilesystem:
             host_shortcut: str = 'sol',
             compression: str = 'z',
             strip_level: int = 2
-    ) -> str | list[str]:
+        ) -> str | list[str]:
         """
         Given server filepath(s), it returns the created corresponding local filepath(s). Partially
         mirrors the server directory path(s) inside a temporary folder.

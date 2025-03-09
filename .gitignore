@@ -5,11 +5,15 @@
 !/common/
 !/tests/
 
+# BLACKLIST hidden directories
+**/.*/
+
 # WHITELIST types
-!*.py
 !**/*.py
+!**/*.pyi
 !**/*.sh
 
 # WHITELIST files
+!README.md
 !.gitignore
 !.requirements.txt

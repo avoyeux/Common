@@ -13,7 +13,7 @@ import numpy as np
 # IMPORTs sub
 from time import time, ctime
 from typeguard import typechecked
-from typing import Any, Type, Callable, TypeVar, cast
+from typing import Any, cast, Type, Callable, TypeVar, overload
 
 # PUBLIC API
 __all__ = ['ClassDecorator', 'Decorators']
@@ -74,13 +74,30 @@ def ClassDecorator(decorator: D, functiontype: T | str = 'all') -> Callable[[T],
                     setattr(NewClass, name, method)
         return NewClass
     return class_rebuilder
-                
+
 
 class Decorators:
     """
     To store useful function decorators that I created.
     """
     # todo add decorator that prints all inputs.
+
+    @overload
+    @staticmethod
+    def running_time(func: F) -> F: ...
+
+    @overload
+    @staticmethod
+    def running_time(*, verbose_name: str = ..., flush_name: str = ...) -> Callable[[F], F]: ...
+
+    @overload  # fallback
+    @staticmethod
+    def running_time(
+            func: F | None = None,
+            *,
+            verbose_name: str = 'verbose',
+            flush_name: str = 'flush',
+        ) -> F | Callable[[F], F]: ...
 
     @staticmethod  
     def running_time(

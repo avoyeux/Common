@@ -7,7 +7,7 @@ import os
 import yaml
 
 # IMPORTs sub
-from typing import Any
+from typing import Any, Protocol
 
 # IMPORTs personal
 from .main_paths import root_path
@@ -17,7 +17,15 @@ __all__ = ['ConfigToObject', 'config']
 
 
 
-class DictToObj:
+class DictToObj(Protocol):
+    """
+    To ignore the static attribute name checks of a class.
+    """
+
+    def __getattr__(self, name: str) -> Any: ...
+
+
+class DictToObjClass:
     """
     To convert a dictionary to an object.
     """
@@ -30,11 +38,24 @@ class DictToObj:
             dictionary (dict): the dictionary to change to a class instance.
         """
 
-        # DICTKEYs as attributes
+        # DICT KEYs as attributes
         for key, value in dictionary.items():
-            setattr(self, key, DictToObj(value) if isinstance(value, dict) else value)
+            setattr(self, key, DictToObjClass(value) if isinstance(value, dict) else value)
 
-    
+    def __getattr__(self, name: str) -> None:
+        """
+        To ignore the static type checking of the attributes of a class.
+
+        Args:
+            name (str): the name of the attribute to get.
+
+        Returns:
+            None: if the attribute does not exist.
+        """
+
+        raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
+
+
 class ConfigToObject:
     """
     To convert the config.yml file information to an instance of the class.
@@ -45,8 +66,8 @@ class ConfigToObject:
         To convert the config.yml file information to an instance of the class.
         
         Args:
-            config_path (str, optional): the path to the config file. When None, the config file
-                is at the root_path and called 'config.yml'. Defaults to None.
+            config_path (str | None, optional): the path to the config file. When None, the config
+                file is at the root_path and called 'config.yml'. Defaults to None.
         """
 
         # CONFIG open
@@ -57,7 +78,7 @@ class ConfigToObject:
         config = self.get_config(filepath)
 
         # OBJECT from dict
-        self._config = DictToObj(config)
+        self._config: DictToObj = DictToObjClass(config)
 
     def join_constructor(
             self,
@@ -79,7 +100,7 @@ class ConfigToObject:
         str_list = [value if isinstance(value, str) else "" for value in str_list]
         return os.path.join(*str_list)
     
-    def  rootpath_constructor(
+    def rootpath_constructor(
             self,
             loader: yaml.loader.SafeLoader,
             node: yaml.nodes.ScalarNode,

@@ -5,14 +5,14 @@ For functions that are related to plotting data
 
 # IMPORTs
 import scipy
-import typing
 
 # IMPORTs alias
 import numpy as np
 
 # IMPORTs sub
-import matplotlib.pyplot as plt
 import scipy.interpolate
+import matplotlib.pyplot as plt
+from typing import Any, Generator
 
 
 
@@ -49,7 +49,7 @@ class Plot:
         return lines
     
     @staticmethod
-    def random_hexadecimal_int_color_generator() -> typing.Generator[int, None, None]:
+    def random_hexadecimal_int_color_generator() -> Generator[int, None, None]:
         """
         Generator that yields a color value in integer hexadecimal code format.
 
@@ -65,7 +65,7 @@ class Plot:
         while True: yield np.random.randint(0, 0xffffff)
 
     @staticmethod
-    def different_colours(omit: list[str] = ['white']) -> typing.Generator[str, None, None]:
+    def different_colours(omit: list[str] = ['white']) -> Generator[str, None, None]:
         """
         To get plot colours that are really different.
 
@@ -107,17 +107,22 @@ class AnnotateAlongCurve:
             self,
             x: np.ndarray,
             y: np.ndarray,
-            arc_length: np.ndarray,  # ? make it more generic ?
-            step: int | float,  # * change this if arc_length becomes something else
-            offset: float,
+            arc_length: np.ndarray,
+            step: int | float,
+            offset: float = 0,
+            annotate_kwargs: dict[str, Any] = {},
         ) -> None:
 
-        # ATTRIBUTEs
+        # ARGUMENTs
         self.x = x
         self.y = y
         self.arc_length = arc_length
         self.step = step
         self.offset = offset
+        self.annotate_kwargs = annotate_kwargs
+
+        # ATTRIBUTEs
+        self.gradient_dx = 5  # ? no clue in what unit it is
 
         # RUN
         self.x_interp, self.y_interp = self.curve_interpolation()
@@ -152,16 +157,14 @@ class AnnotateAlongCurve:
 
             # TANGENT angle
             dx = self.gradient_with_boundaries(
-                dx=1e-6,
                 interpolation=self.x_interp,
                 boundaries=(self.arc_length[0], self.arc_length[-1]),
-                position=pos,
+                position=float(pos),
             )
             dy = self.gradient_with_boundaries(
-                dx=1e-6,
                 interpolation=self.y_interp,
                 boundaries=(self.arc_length[0], self.arc_length[-1]),
-                position=pos,
+                position=float(pos),
             )
             angle = np.arctan2(dy, dx)
 
@@ -169,26 +172,31 @@ class AnnotateAlongCurve:
             dx_offset = self.offset * np.cos(angle + np.pi / 2)
             dy_offset = self.offset * np.sin(angle + np.pi / 2)
 
+            annotate_kwargs = {
+                'fontsize': 8,
+                'ha': 'center',
+                'va': 'center',
+                'rotation': np.rad2deg(angle),
+                'color': 'grey',
+                'alpha': 0.7,
+                'zorder': 10,
+            }
+            annotate_kwargs.update(self.annotate_kwargs)
+
             # ANNOTATE
             plt.annotate(  # ? would this word with subplots ?
-                str(pos),
+                str(round(pos)),  # ? what to do for the value precision
                 xy=(x, y),
                 xytext=(x + dx_offset, y + dy_offset),
-                fontsize=8,
-                ha='center',
-                va='center',
-                color='grey',
-                alpha=0.5,
-                rotation=np.rad2deg(angle),
+                **annotate_kwargs,
             )
 
     def gradient_with_boundaries(
             self,
-            dx: float,
             interpolation: scipy.interpolate.interp1d,
             boundaries: tuple[float, float],
-            position: int | float,
-        ) -> int | float:
+            position: float,
+        ) -> float:
         """
         To compute the gradient with boundaries.
         When getting to a boundary, the gradient is computed using the first derivative.
@@ -203,9 +211,22 @@ class AnnotateAlongCurve:
             int | float: the gradient at the position.
         """
 
-        tolerance = 1e-6  # for floating points
-        if abs(position - min(boundaries)) < tolerance:
-            return (interpolation(position + dx) - interpolation(position)) / dx
-        if abs(position - max(boundaries)) < tolerance:
-            return (interpolation(position) - interpolation(position - dx)) / dx
-        return (interpolation(position + dx) - interpolation(position - dx)) / (2 * dx)
+        tolerance = 1e-5  # for floating points
+        if (position - self.gradient_dx) - min(boundaries)  < tolerance:
+            gradient = (
+                (interpolation(position + self.gradient_dx) - interpolation(position))
+                / self.gradient_dx
+            )
+        elif max(boundaries) - (position + self.gradient_dx) < tolerance:
+            gradient = (
+                (interpolation(position) - interpolation(position - self.gradient_dx))
+                / self.gradient_dx
+            )
+        else:           
+            gradient = (
+                (
+                    interpolation(position + self.gradient_dx)
+                    - interpolation(position - self.gradient_dx)
+                ) / (2 * self.gradient_dx)
+            )
+        return gradient

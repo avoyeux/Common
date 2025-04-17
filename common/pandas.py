@@ -2,6 +2,10 @@
 Has functions to help with pandas operations.
 """
 
+# TYPE ANNOTATIONs
+from typing import TypeVar
+T = TypeVar('T')
+
 
 
 class Pandas:
@@ -11,18 +15,18 @@ class Pandas:
     
     @staticmethod
     def safe_round(
-            x: any,
+            x: T,
             decimals: int = 0,
             try_convert_string: bool = False,
             verbose: int = 0,
             flush: bool = False,
-        ) -> any:
+        ) -> T:
         """
         To round values if possible. You can also choose to round strings if it represents a 
         number.
 
         Args:
-            x (any): value to be rounded if possible.
+            x (Any): value to be rounded if possible.
             decimals (int, optional): number of decimals for the output. Defaults to 0.
             try_convert_strings (bool, optional): to convert and round strings when possible.
                 Defaults to False.
@@ -34,12 +38,12 @@ class Pandas:
                 multiprocessing). Defaults to False.
 
         Returns:
-            any: the rounded value or the input value if rounding not possible.
+            Any: the rounded value or the input value if rounding not possible.
         """
 
         try:
-            if try_convert_string: x = float(x)
-            return round(x, decimals)
+            if try_convert_string: x = float(x)  #type:ignore
+            return round(x, decimals)  #type:ignore
         except Exception as e:
             if verbose > 0:
                 print(

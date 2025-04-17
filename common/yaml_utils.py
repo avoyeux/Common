@@ -6,11 +6,11 @@ To store some functions that can be useful when working with YAML files.
 import os
 import yaml
 
-# IMPORTs sub
-from typing import Any, Protocol
-
 # IMPORTs personal
 from .main_paths import root_path
+
+# TYPE ANNOTATIONs
+from typing import Any, Protocol
 
 # API public
 __all__ = ['ConfigToObject', 'config']
@@ -42,15 +42,15 @@ class DictToObjClass:
         for key, value in dictionary.items():
             setattr(self, key, DictToObjClass(value) if isinstance(value, dict) else value)
 
-    def __getattr__(self, name: str) -> None:
+    def __getattr__(self, name: str) -> Any:
         """
-        To ignore the static type checking of the attributes of a class.
+        To be compatible with the DictToObj protocol class.
 
         Args:
             name (str): the name of the attribute to get.
 
         Returns:
-            None: if the attribute does not exist.
+            Any: check the protocol class DictToObj.
         """
 
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")

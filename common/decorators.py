@@ -13,12 +13,12 @@ import numpy as np
 # IMPORTs sub
 from time import time, ctime
 from typeguard import typechecked
-from typing import Any, cast, Type, Callable, TypeVar, overload
 
 # PUBLIC API
 __all__ = ['ClassDecorator', 'Decorators']
 
-# General function and decorator types
+# TYPE ANNOTATIONs
+from typing import Any, cast, Type, Callable, TypeVar, overload
 F = TypeVar('F', bound=Callable[..., Any])
 D = Callable[[F], any]
 T = TypeVar('T', bound=Type)

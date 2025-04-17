@@ -18,6 +18,18 @@ class StringFormatter:
             indentation: str = '| ',
             ansi: bool = False,
         ) -> None:
+        """
+        To initialise the StringFormatter class.
+        This class is used to reformat strings so that they are of a set length. It also allows
+        for the addition of a prefix and/or a suffix to the string. It also allows for the
+        addition of ANSI code in the inputs by setting 'ansi_all'=True. Slower that way, hence
+        the default being 'ansi_all'=False.
+
+        Args:
+            max_length (int): the maximum length of the final string before linebreak.
+            indentation (str, optional): the string to be used for indentation. Defaults to '| '.
+            ansi (bool, optional): deciding to use ANSI code or not. Defaults to False.
+        """
 
         self.max_length = max_length
         self.indentation = indentation

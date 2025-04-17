@@ -3,9 +3,10 @@
 Has functions that help me manipulate arrays (e.g. resizing an image with a resampling method).
 """
 
-# Imports
-
+# IMPORTs alias
 import numpy as np
+
+# IMPORTs sub
 from PIL import Image
 
 
@@ -18,7 +19,7 @@ class ArrayManipulation:
     @staticmethod
     def downsampling(
             array2D: np.ndarray,
-            downsampling_size: tuple[int, ...],
+            downsampling_size: tuple[int, int],
             return_ndarray: bool = True,
         ) -> np.ndarray | Image.Image:
         """
@@ -34,8 +35,8 @@ class ArrayManipulation:
             np.ndarray | Image.Image: the resized data.
         """
 
-        array2D = Image.fromarray(array2D)
-        array2D = array2D.resize(downsampling_size, Image.Resampling.LANCZOS)
+        pil_array = Image.fromarray(array2D)
+        pil_array = pil_array.resize(downsampling_size, Image.Resampling.LANCZOS)
         
         if return_ndarray: return np.array(array2D)
         return array2D

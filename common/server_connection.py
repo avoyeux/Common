@@ -13,8 +13,9 @@ import subprocess
 # IMPORTS alias
 import multiprocessing as mp
 
-# IMPORTS sub
-from typing import overload
+# TYPE ANNOTATIONs
+from typing import cast, TypeVar
+StrOrListType = TypeVar('StrOrListType', bound=str | list[str])
 
 
 
@@ -151,20 +152,7 @@ class SSHMirroredFilesystem:
             time.sleep(0.1)
         return False
 
-    @overload
-    def mirror(self, remote_filepaths: str, strip_level: int = ...) -> str: ...
-
-    @overload
-    def mirror(self, remote_filepaths: list[str], strip_level: int = ...) -> list[str]: ...
-
-    @overload  # fallback
-    def mirror(
-            self,
-            remote_filepaths: str | list[str],
-            strip_level: int = ...,
-        ) -> str | list[str]: ...
-
-    def mirror(self, remote_filepaths: str | list[str], strip_level: int = 2) -> str | list[str]:
+    def mirror(self, remote_filepaths: StrOrListType, strip_level: int = 2) -> StrOrListType:
         """
         Given server filepath(s), it returns the corresponding filepath(s) to the file(s) now in
         the local temporary folder. The filename order remains the same than the inputted one.
@@ -187,7 +175,8 @@ class SSHMirroredFilesystem:
         """
 
         # SETUP        
-        if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
+        if isinstance(remote_filepaths, str):
+            remote_filepaths = cast(StrOrListType, [remote_filepaths])
         remote_filepaths_str = ' '.join(remote_filepaths)
 
         # TEMP folder
@@ -225,8 +214,8 @@ class SSHMirroredFilesystem:
             os.path.join(folder_path, self._strip(remote_filepaths[i], strip_level))
             for i in range(length)
         ]
-        if length == 1: return local_filepaths[0]
-        return local_filepaths
+        if length == 1: return cast(StrOrListType, local_filepaths[0])
+        return cast(StrOrListType, local_filepaths)
 
     def close(self) -> None:
         """
@@ -254,40 +243,14 @@ class SSHMirroredFilesystem:
                     f"Error: {error_message}\033[0m",
                     flush=self.flush,
                 )
-    @overload
-    @staticmethod
-    def remote_to_local(
-            remote_filepaths: str,
-            host_shortcut: str = ...,
-            compression: str = ...,
-            strip_level: int = ...,
-        ) -> str: ...
-
-    @overload
-    @staticmethod
-    def remote_to_local(
-            remote_filepaths: list[str],
-            host_shortcut: str = ...,
-            compression: str = ...,
-            strip_level: int = ...,
-        ) -> list[str]: ...
-
-    @overload  # fallback
-    @staticmethod
-    def remote_to_local(
-            remote_filepaths: str | list[str],
-            host_shortcut: str = ...,
-            compression: str = ...,
-            strip_level: int = ...,
-        ) -> str | list[str]: ...
 
     @staticmethod
     def remote_to_local(
-            remote_filepaths: str | list[str],
+            remote_filepaths: StrOrListType,
             host_shortcut: str = 'sol',
             compression: str = 'z',
             strip_level: int = 2,
-        ) -> str | list[str]:
+        ) -> StrOrListType:
         """
         Given server filepath(s), it returns the created corresponding local filepath(s). Partially
         mirrors the server directory path(s) inside a temporary folder.
@@ -315,7 +278,8 @@ class SSHMirroredFilesystem:
         """
 
         # Setup        
-        if isinstance(remote_filepaths, str): remote_filepaths = [remote_filepaths]
+        if isinstance(remote_filepaths, str):
+            remote_filepaths = cast(StrOrListType, [remote_filepaths])
         remote_filepaths_str = ' '.join(remote_filepaths)
 
         # Temporary sub folder creation
@@ -351,8 +315,8 @@ class SSHMirroredFilesystem:
             )
             for i in range(length)
         ]
-        if len(local_filepaths) == 1: return local_filepaths[0]
-        return local_filepaths    
+        if len(local_filepaths) == 1: return cast(StrOrListType, local_filepaths[0])
+        return cast(StrOrListType, local_filepaths)
   
     @staticmethod
     def cleanup(which: str = 'all', verbose: int = 0) -> None:

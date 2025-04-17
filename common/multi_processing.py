@@ -3,19 +3,24 @@
 Has functions that help me when multiprocessing.
 """
 
-# Imports
-import typing
-
+# IMPORTs alias
 import numpy as np
 import multiprocessing as mp
 
-# Sub imports
-import multiprocessing.queues
+# IMPORTs sub
+from multiprocessing import shared_memory
+
+# TYPE ANNOTATIONs
+import queue
 import multiprocessing.managers
-import multiprocessing.shared_memory
+from typing import Any, Callable, cast, TypeAlias
+ManagerQueueProxy: TypeAlias = queue.Queue  # couldn't the exact type annotation so using a parent
+IntValueProxy: TypeAlias = multiprocessing.managers.ValueProxy[int]
+SharedMemoryAlias: TypeAlias = shared_memory.SharedMemory
 
 # Public classes
 __all__ = ['MultiProcessing']
+
 
 
 class SharedMemoryList(list):
@@ -24,10 +29,7 @@ class SharedMemoryList(list):
     objects. It inherits from the list class so that the instance itself it a list.
     """
 
-    def __init__(
-            self,
-            shm: list[mp.shared_memory.SharedMemory] | mp.shared_memory.SharedMemory,
-        ) -> None:
+    def __init__(self, shm: list[SharedMemoryAlias] | SharedMemoryAlias) -> None:
         """
         To be able to use .close() and .unlink() directly on a list of shared memory objects.
 
@@ -61,9 +63,9 @@ class MultiProcessing:
     #TODO: I need to add an option where the inputted subprocess data is the whole inputted data.
     @staticmethod
     def multiprocessing(
-            input_data: list | np.ndarray | dict[str, any],
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
+            input_data: list | np.ndarray | dict[str, Any],
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
             processes: int,
             shared_memory_input: bool = False,
             create_shared_memory: bool = False,
@@ -82,11 +84,11 @@ class MultiProcessing:
         shared_memory object (gotten with the cls.create_shared_memory method). 
 
         Args:
-            input_data (list | np.ndarray | dict[str, any]): the data to be multiprocessed. It can
+            input_data (list | np.ndarray | dict[str, Any]): the data to be multiprocessed. It can
                 also be the data shared memory information dictionary gotten from
                 cls.create_shared_memory(). 
-            function (typing.Callable[..., any]): the function to be multiprocessed.
-            function_kwargs (dict[str, any]): the multiprocessed function's keyword arguments.
+            function (Callable[..., Any]): the function to be multiprocessed.
+            function_kwargs (dict[str, Any]): the multiprocessed function's keyword arguments.
             processes (int): the number of processes used in the multiprocessing.
             shared_memory_input (bool, optional): if the input data is actually a shared memory
                 information dictionary gotten from cls.shared_memory. Defaults to False.
@@ -168,8 +170,8 @@ class MultiProcessing:
             multiple: bool = False,
             verbose: int = 1,
         ) -> tuple[
-            mp.shared_memory.SharedMemory | list[mp.shared_memory.SharedMemory],
-            dict[str, any],
+            SharedMemoryAlias | SharedMemoryList,
+            dict[str, Any],
         ]:
         """
         Creating shared memory object(s) given an input ndarray or list of ndarray.  
@@ -194,7 +196,12 @@ class MultiProcessing:
 
         elif isinstance(data, list):
             try: 
-                data = np.ndarray(data)
+                data = np.stack(data, axis=0)
+                shm, info = MultiProcessing.create_shared_memory(
+                    data=data,
+                    multiple=False,
+                    verbose=verbose,
+                )
             except Exception:
                 if verbose > 0:
                     print(
@@ -204,7 +211,7 @@ class MultiProcessing:
                 shm, info = MultiProcessingUtils.shared_memory_multiple(data)
         else:
             # Initialisations
-            shm = mp.shared_memory.SharedMemory(create=True, size=data.nbytes)
+            shm = shared_memory.SharedMemory(create=True, size=data.nbytes)
             info = {
                 'name': shm.name,
                 'shape': data.shape,
@@ -217,9 +224,9 @@ class MultiProcessing:
     
     @staticmethod
     def open_shared_memory(
-            data_info: dict[str, any],
+            data_info: dict[str, Any],
         ) -> tuple[
-            mp.shared_memory.SharedMemory, np.ndarray
+            SharedMemoryAlias, np.ndarray
         ] | tuple[
             SharedMemoryList, list[np.ndarray]
         ]:
@@ -228,7 +235,7 @@ class MultiProcessing:
         MultiProcessing.create_shared_memory method shared memory information.
 
         Args:
-            data_info (dict[str, any]): the shared memory information gotten from
+            data_info (dict[str, Any]): the shared memory information gotten from
                 MultiProcessing.create_shared_memory() method.
 
         Returns:
@@ -243,23 +250,23 @@ class MultiProcessing:
         """
 
         if isinstance(data_info['name'], str):
-            shm = mp.shared_memory.SharedMemory(name=data_info['name'])
+            shm = shared_memory.SharedMemory(name=data_info['name'])
             data = np.ndarray(shape=data_info['shape'], dtype=data_info['dtype'], buffer=shm.buf)
             return shm, data
         
         else:
             data_len = len(data_info['name'])
-            shm = [None] * data_len
-            data = [None] * data_len
+            shm_list: list[SharedMemoryAlias] = cast(list[SharedMemoryAlias], [None] * data_len)
+            data_list: list[np.ndarray] = cast(list[np.ndarray], [None] * data_len)
 
             for i in range(data_len):
-                shm[i] = mp.shared_memory.SharedMemory(name=data_info['name'][i])
-                data[i] = np.ndarray(
+                shm_list[i] = shared_memory.SharedMemory(name=data_info['name'][i])
+                data_list[i] = np.ndarray(
                     shape=data_info['shape'][i],
                     dtype=data_info['dtype'][i],
-                    buffer=shm[i].buf,
+                    buffer=shm_list[i].buf,
                 )
-            return SharedMemoryList(shm), data
+            return SharedMemoryList(shm_list), data_list
 
 
 class MultiProcessingUtils:
@@ -269,9 +276,9 @@ class MultiProcessingUtils:
 
     def __init__(
             self,
-            input_data: list | np.ndarray | dict[str, any],
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
+            input_data: list | np.ndarray | dict[str, Any],
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
             processes: int,
             shared_memory_input: bool,
             create_shared_memory: bool,
@@ -290,11 +297,11 @@ class MultiProcessingUtils:
         shared_memory object (gotten with the cls.create_shared_memory method). 
 
         Args:
-            input_data (list | np.ndarray | dict[str, any]): the data to be multiprocessed. It can
+            input_data (list | np.ndarray | dict[str, Any]): the data to be multiprocessed. It can
                 also be the data shared memory information dictionary gotten from
                 cls.create_shared_memory(). 
-            function (typing.Callable[..., any]): the function to be multiprocessed.
-            function_kwargs (dict[str, any]): the multiprocessed function's keyword arguments.
+            function (Callable[..., Any]): the function to be multiprocessed.
+            function_kwargs (dict[str, Any]): the multiprocessed function's keyword arguments.
             processes (int): the number of processes used in the multiprocessing.
             shared_memory_input (bool): if the input data is actually a shared memory information
                 dictionary gotten from cls.shared_memory.
@@ -335,7 +342,7 @@ class MultiProcessingUtils:
 
         # Created arguments
         if shared_memory_input:
-            self.data_len: int = self.input_data['shape'][0]
+            self.data_len: int = cast(dict[str, list[int]], self.input_data)['shape'][0]
         else:
             self.data_len = len(self.input_data)
         self.nb_processes = min(self.data_len, processes)
@@ -397,7 +404,7 @@ class MultiProcessingUtils:
             if self.create_shared_memory and not self.shared_memory_input: shm.unlink()
         return results
     
-    def _multiprocess_indexes_all_data(self, output_queue: mp.queues.Queue) -> None:
+    def _multiprocess_indexes_all_data(self, output_queue: ManagerQueueProxy) -> None:
         """
         Multiprocessing by using sections of the data to leverage as much as possible operations
         written in C (e.g. np.ndarray multiplications). In this case, all the data is given as
@@ -405,11 +412,11 @@ class MultiProcessingUtils:
         dictionary).
 
         Args:
-            output_queue (mp.queues.Queue): the results gotten from the multiprocessing.
+            output_queue (ManagerQueueProxy): the results gotten from the multiprocessing.
         """
 
         # Initial setup
-        processes = [None] * self.nb_processes
+        processes = cast(list[mp.Process], [None] * self.nb_processes)
         indexes = MultiProcessing.pool_indexes(self.data_len, self.nb_processes)
 
         if self.identifier:
@@ -443,17 +450,17 @@ class MultiProcessingUtils:
                 processes[i] = p
         for p in processes: p.join()
 
-    def _multiprocess_indexes(self, output_queue: mp.queues.Queue) -> None:
+    def _multiprocess_indexes(self, output_queue: ManagerQueueProxy) -> None:
         """
         Multiprocessing by using sections of the data to leverage as much as possible operations
         written in C (e.g. np.ndarray multiplications).
 
         Args:
-            output_queue (mp.queues.Queue): the results gotten from the multiprocessing.
+            output_queue (ManagerQueueProxy): the results gotten from the multiprocessing.
         """
 
         # Initial setup
-        processes = [None] * self.nb_processes
+        processes = cast(list[mp.Process], [None] * self.nb_processes)
         indexes = MultiProcessing.pool_indexes(self.data_len, self.nb_processes)
 
         if isinstance(self.input_data, dict) and ('name' in self.input_data.keys()):
@@ -521,20 +528,20 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_indexes_sub_without_indexes_all_data(
-            data: any,
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            output_queue: mp.queues.Queue,
+            data: Any,
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            output_queue: ManagerQueueProxy,
             identifier: int,
     ) -> None:
         """
-        Multiprocessing a function. #TODO: change docstring
+        Multiprocessing with an identifier.
 
         Args:
-            data (any): the data to be inputted in the function.
-            function (typing.Callable[..., any]): the function used in the multiprocessing.
-            function_kwargs (dict[str, any]): the function keyword arguments.
-            output_queue (mp.queues.Queue): to get the results outside the function.
+            data (Any): the data to be inputted in the function.
+            function (typing.Callable[..., Any]): the function used in the multiprocessing.
+            function_kwargs (dict[str, Any]): the function keyword arguments.
+            output_queue (ManagerQueueProxy): to get the results outside the function.
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
@@ -550,10 +557,10 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_indexes_sub_with_indexes_all_data(
-            data: any,
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            output_queue: mp.queues.Queue,
+            data: Any,
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            output_queue: ManagerQueueProxy,
             identifier: int,
             index: tuple[int, int],
     ) -> None:
@@ -561,10 +568,10 @@ class MultiProcessingUtils:
         Multiprocessing a function. #TODO: change docstring
 
         Args:
-            data (any): the data to be inputted in the function.
-            function (typing.Callable[..., any]): the function used in the multiprocessing.
-            function_kwargs (dict[str, any]): the function keyword arguments.
-            output_queue (mp.queues.Queue): to get the results outside the function.
+            data (Any): the data to be inputted in the function.
+            function (Callable[..., Any]): the function used in the multiprocessing.
+            function_kwargs (dict[str, Any]): the function keyword arguments.
+            output_queue (ManagerQueueProxy): to get the results outside the function.
             identifier (int): the identifier to know which section of the main data is being 
                 multiprocessed.
         """
@@ -580,10 +587,10 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_indexes_sub_without_indexes(
-            data: any,
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            output_queue: mp.queues.Queue,
+            data: Any,
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            output_queue: ManagerQueueProxy,
             identifier: int,
     ) -> None:
         """
@@ -593,7 +600,7 @@ class MultiProcessingUtils:
             data (any): the data to be inputted in the function.
             function (typing.Callable[..., any]): the function used in the multiprocessing.
             function_kwargs (dict[str, any]): the function keyword arguments.
-            output_queue (mp.queues.Queue): to get the results outside the function.
+            output_queue (ManagerQueueProxy): to get the results outside the function.
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
@@ -603,10 +610,10 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_indexes_sub_with_indexes(
-            data: any,
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            output_queue: mp.queues.Queue,
+            data: Any,
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            output_queue: ManagerQueueProxy,
             identifier: int,
             index: tuple[int, int],
     ) -> None:
@@ -617,7 +624,7 @@ class MultiProcessingUtils:
             data (any): the data to be inputted in the function.
             function (typing.Callable[..., any]): the function used in the multiprocessing.
             function_kwargs (dict[str, any]): the function keyword arguments.
-            output_queue (mp.queues.Queue): to get the results outside the function.
+            output_queue (ManagerQueueProxy): to get the results outside the function.
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
@@ -627,10 +634,10 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_indexes_sub_without_indexes_dict(
-            data: dict[str, any],
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            output_queue: mp.queues.Queue,
+            data: dict[str, Any],
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            output_queue: ManagerQueueProxy,
             identifier: int,
             index: tuple[int, int],
     ) -> None:
@@ -641,24 +648,24 @@ class MultiProcessingUtils:
             data (any): the data to be inputted in the function.
             function (typing.Callable[..., any]): the function used in the multiprocessing.
             function_kwargs (dict[str, any]): the function keyword arguments.
-            output_queue (mp.queues.Queue): to get the results outside the function.
+            output_queue (ManagerQueueProxy): to get the results outside the function.
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
 
-        shm, data = MultiProcessing.open_shared_memory(data)
+        shm, data_opened = MultiProcessing.open_shared_memory(data)
         
-        result = function(data[index[0]:index[1] + 1], **function_kwargs)
+        result = function(data_opened[index[0]:index[1] + 1], **function_kwargs)
         output_queue.put((identifier, result))
 
         shm.close()
 
     @staticmethod
     def _multiprocessing_indexes_sub_with_indexes_dict(
-            data: dict[str, any],
-            function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            output_queue: mp.queues.Queue,
+            data: dict[str, Any],
+            function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            output_queue: ManagerQueueProxy,
             identifier: int,
             index: tuple[int, int],
     ) -> None:
@@ -670,26 +677,26 @@ class MultiProcessingUtils:
             data (any): the data to be inputted in the function.
             function (typing.Callable[..., any]): the function used in the multiprocessing.
             function_kwargs (dict[str, any]): the function keyword arguments.
-            output_queue (mp.queues.Queue): to get the results outside the function.
+            output_queue (ManagerQueueProxy): to get the results outside the function.
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
             index (tuple[int, int]): the indexes for the section of the data that is being
                 multiprocessed.
         """
         
-        shm, data = MultiProcessing.open_shared_memory(data)
+        shm, data_opened = MultiProcessing.open_shared_memory(data)
 
-        result = function(data[index[0]:index[1] + 1], index, **function_kwargs)
+        result = function(data_opened[index[0]:index[1] + 1], index, **function_kwargs)
         output_queue.put((identifier, result))
 
         shm.close()
 
     def _multiprocess_while_all_data(
             self,
-            shared_value: mp.managers.ValueProxy,
-            output_queue: mp.queues.Queue,
+            shared_value: IntValueProxy,
+            output_queue: ManagerQueueProxy,
         ) -> None:
-        """ #TODO:change docstring
+        """
         Multiprocessing all the data using a while loop. This means that the function to be
         multiprocessed should only take one index of the main data as the first function argument. 
         For this 'all_data' function, all the initial data is given as an argument to the function
@@ -697,14 +704,14 @@ class MultiProcessingUtils:
         corresponding shared memory object (cf. MultiProcessing.create_shared_memory()).
 
         Args:
-            input_queue (mp.queues.Queue): has the index identifier of the data is going to be
-                processed.
-            output_queue (mp.queues.Queue): to save the identifier and the corresponding result
+            shared_value (mp.managers.ValueProxy[int]): the shared value to be used in the while
+                loop.
+            output_queue (ManagerQueueProxy): to save the identifier and the corresponding result
                 from the multiprocessing.
         """
 
         # Initial setup
-        processes = [None] * self.nb_processes
+        processes = cast(list[mp.Process], [None] * self.nb_processes)
 
         # Run
         if self.identifier:
@@ -743,21 +750,22 @@ class MultiProcessingUtils:
 
     def _multiprocess_while(
             self,
-            shared_value: mp.managers.ValueProxy,
-            output_queue: mp.queues.Queue,
+            shared_value: IntValueProxy,
+            output_queue: ManagerQueueProxy,
         ) -> None:
         """
         Multiprocessing all the data using a while loop. This means that the function to be
         multiprocessed should only take one index of the main data as the first function argument. 
 
         Args:
-            input_queue (mp.queues.Queue): an empty queue to be populated.
-            output_queue (mp.queues.Queue): to save the identifier and the corresponding result
+            shared_value (mp.managers.ValueProxy[int]): the shared value to be used in the while
+                loop.
+            output_queue (ManagerQueueProxy): to save the identifier and the corresponding result
                 from the multiprocessing.
         """
 
         # Initial setup
-        processes = [None] * self.nb_processes
+        processes = cast(list[mp.Process], [None] * self.nb_processes)
 
         # Run
         if self.identifier:
@@ -795,12 +803,12 @@ class MultiProcessingUtils:
     
     @staticmethod
     def _multiprocessing_while_sub_with_indexes_all_data(
-            input_function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            data: dict[str, any] | np.ndarray,
+            input_function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: mp.managers.ValueProxy,
-            output_queue: mp.queues.Queue,
+            shared_value: IntValueProxy,
+            output_queue: ManagerQueueProxy,
         ) -> None:
         """ #TODO: change docstring
         To run a process in a while loop given an input and output queue. The data is accessed
@@ -808,13 +816,13 @@ class MultiProcessingUtils:
         given to the function to be multiprocessed as the second argument of the function.
 
         Args:
-            input_function (typing.Callable[..., any]): the function that needs multiprocessing.
-            function_kwargs (dict[str, any]): the keyword arguments for the function to be
+            input_function (Callable[..., Any]): the function that needs multiprocessing.
+            function_kwargs (dict[str, Any]): the keyword arguments for the function to be
                 multiprocessed.
-            data (dict[str, any]): the shared memory information to point to the data.
-            input_queue (mp.queues.Queue): to get the identifier to know what part of the data is
-                being processed.
-            output_queue (mp.queues.Queue): to save the identifier and the process result.
+            data (dict[str, Any]): the shared memory information to point to the data.
+            shared_value (mp.managers.ValueProxy[int]): to get the identifier to know what part of
+                the data is being processed.
+            output_queue (ManagerQueueProxy): to save the identifier and the process result.
         """
 
         shm = None
@@ -836,23 +844,23 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_while_sub_without_indexes_all_data(
-            input_function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            data: dict[str, any] | np.ndarray,
+            input_function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: mp.managers.ValueProxy,
-            output_queue: mp.queues.Queue,
+            shared_value: IntValueProxy,
+            output_queue: ManagerQueueProxy,
         ) -> None:
         """ #TODO: change the docstring.
         To run a process in a while loop given an input and output queue. The data is accessed
         through the information of a shared memory object.
 
         Args:
-            input_function (typing.Callable[..., any]): the function that needs multiprocessing.
-            function_kwargs (dict[str, any]): the keyword arguments for the function to be
+            input_function (Callable[..., Any]): the function that needs multiprocessing.
+            function_kwargs (dict[str, Any]): the keyword arguments for the function to be
                 multiprocessed.
-            data (dict[str, any]): the shared memory information to point to the data.
-            output_queue (mp.queues.Queue): to save the identifier and the process result.
+            data (dict[str, Any]): the shared memory information to point to the data.
+            output_queue (ManagerQueueProxy): to save the identifier and the process result.
         """
 
         shm = None
@@ -874,12 +882,12 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_while_sub_with_indexes(
-            input_function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            data: dict[str, any] | np.ndarray,
+            input_function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: mp.managers.ValueProxy,
-            output_queue: mp.queues.Queue,
+            shared_value: IntValueProxy,
+            output_queue: ManagerQueueProxy,
         ) -> None:
         """
         To run a process in a while loop given an input and output queue.
@@ -887,12 +895,12 @@ class MultiProcessingUtils:
         for which part of the data is being processed.
 
         Args:
-            input_function (typing.Callable[..., any]): the function that needs multiprocessing.
-            function_kwargs (dict[str, any]): the keyword arguments for the function to be
+            input_function (Callable[..., Any]): the function that needs multiprocessing.
+            function_kwargs (dict[str, Any]): the keyword arguments for the function to be
                 multiprocessed.
-            input_queue (mp.queues.Queue): to get the identifier and the corresponding data to be
-                multiprocessed.
-            output_queue (mp.queues.Queue): to save the identifier and the process result.
+            shared_value (mp.manager.ValueProxy[int]): to get the identifier and the corresponding
+                data to be multiprocessed.
+            output_queue (ManagerQueueProxy): to save the identifier and the process result.
         """
 
         shm = None
@@ -915,12 +923,12 @@ class MultiProcessingUtils:
 
     @staticmethod
     def _multiprocessing_while_sub_without_indexes(
-            input_function: typing.Callable[..., any],
-            function_kwargs: dict[str, any],
-            data: dict[str, any] | np.ndarray,
+            input_function: Callable[..., Any],
+            function_kwargs: dict[str, Any],
+            data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: mp.managers.ValueProxy,
-            output_queue: mp.queues.Queue,
+            shared_value: IntValueProxy,
+            output_queue: ManagerQueueProxy,
         ) -> None:
         """
         To run a process in a while loop given an input and output queue.
@@ -929,9 +937,9 @@ class MultiProcessingUtils:
             input_function (typing.Callable[..., any]): the function that needs multiprocessing.
             function_kwargs (dict[str, any]): the keyword arguments for the function to be
                 multiprocessed.
-            input_queue (mp.queues.Queue): to get the identifier and the corresponding data to be
-                multiprocessed.
-            output_queue (mp.queues.Queue): to save the identifier and the process result.
+            shared_value (mp.managers.ValueProxy[int]): to get the identifier and the corresponding
+                data to be multiprocessed.
+            output_queue (ManagerQueueProxy): to save the identifier and the process result.
         """
 
         shm = None
@@ -970,7 +978,7 @@ class MultiProcessingUtils:
         """
 
         shm = [
-            mp.shared_memory.SharedMemory(create=True, size=section.nbytes)
+            shared_memory.SharedMemory(create=True, size=section.nbytes)
             for section in data
         ]
         info = {

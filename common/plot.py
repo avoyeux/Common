@@ -12,6 +12,8 @@ import numpy as np
 # IMPORTs sub
 import scipy.interpolate
 import matplotlib.pyplot as plt
+
+# TYPE ANNOTATIONs
 from typing import Any, Generator
 
 

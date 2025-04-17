@@ -3,22 +3,29 @@
 Stores some functions that are specific for STEREO data accessing.
 """
 
-# Imports
+# IMPORTs
 import os
 import re
 
+# IMPORTs alias
 import numpy as np
 import pandas as pd
 
+# IMPORTs sub
 from astropy.io import fits
 
-# Personal libraries
+# IMPORTs personal
 from .server_connection import SSHMirroredFilesystem
+
+# TYPE ANNOTATIONs
+from typing import cast, TypeVar
+StrOrListAlias = TypeVar('StrOrListAlias', bound=str | list[str])
+
 
 
 class StereoUtils:
     """For opening, reading and filtering the STEREO catalogue. Most functions only work when on
-    the .ias.u-psud.fr server.
+    the server.
 
     Raises:
         ValueError: _description_
@@ -84,7 +91,7 @@ class StereoUtils:
         return df.reset_index(drop=True)
 
     @staticmethod
-    def fullpath(filenames: str | list[str] | pd.Series) -> str | list[str]:
+    def fullpath(filenames: StrOrListAlias | pd.Series) -> StrOrListAlias:
         """
         Gives the fullpath to a stereo filename. 
 
@@ -100,10 +107,10 @@ class StereoUtils:
         """
         
         # Type changing
-        if isinstance(filenames, str): filenames = [filenames]
+        if isinstance(filenames, str): filenames = cast(StrOrListAlias, [filenames])
         
         len_filenames = len(filenames)
-        list_fullpath = [None] * len_filenames
+        list_fullpath = cast(list[str], [None] * len_filenames)
         for i, filename in enumerate(filenames):
             pattern_match = StereoUtils.stereo_filename_pattern.match(filename)
 
@@ -113,8 +120,8 @@ class StereoUtils:
             else:
                 raise ValueError(f"STEREO filename did not match with: {filename}")    
         
-        if len_filenames == 1: return list_fullpath[0]
-        return list_fullpath
+        if len_filenames == 1: return cast(StrOrListAlias, list_fullpath[0])
+        return cast(StrOrListAlias, list_fullpath)
 
     @staticmethod
     def image_preprocessing(
@@ -130,17 +137,17 @@ class StereoUtils:
             filenames = [filenames]
 
         len_filenames = len(filenames)
-        images = [None] * len_filenames
-        means = [None] * len_filenames
+        images_list = cast(list[np.ndarray], [None] * len_filenames)
+        means_list = cast(list[float], [None] * len_filenames)
         for i, filename in enumerate(filenames):
             if not os.path.isabs(filename): filename = StereoUtils.fullpath(filename)
 
             hdul = fits.open(filename)
-            images[i] = hdul[0].data.astype('uint16')
-            means[i] = hdul[0].header['BIASMEAN']
+            images_list[i] = hdul[0].data.astype('uint16')
+            means_list[i] = hdul[0].header['BIASMEAN']
             hdul.close()
-        images = np.stack(images, axis=0)
-        means = np.stack(means, axis=0)
+        images = np.stack(images_list, axis=0)
+        means = np.stack(means_list, axis=0)
         means = means.reshape(len_filenames, 1, 1)
 
         # Getting the extrema
@@ -160,4 +167,3 @@ class StereoUtils:
 
         if images.shape[0] == 1: return images[0]
         return images
-

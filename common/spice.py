@@ -13,12 +13,20 @@ Dr. Pelouze's github can be found here: https://github.com/gpelouze
 # IMPORTS
 import re
 import os
+
+# IMPORTs alias
 import pandas as pd
 
+# IMPORTs sub
 from dateutil.parser import parse as parse_date
 
-# Personal libraries
+# IMPORTs personal
 from .server_connection import SSHMirroredFilesystem
+
+# TYPE ANNOTATIONs
+from typing import cast, TypeVar
+StrOrListAlias = TypeVar('StrOrListAlias', bound=str | list[str])
+
 
 
 class SpiceUtils:
@@ -136,7 +144,7 @@ class SpiceUtils:
         return m.groupdict()
 
     @staticmethod
-    def ias_fullpath(filenames: str | list[str]) -> str | list[str]:
+    def ias_fullpath(filenames: StrOrListAlias) -> StrOrListAlias:
         """
         Gives the server fullpath to a SPICE FITS file given it's filename(s).
 
@@ -149,7 +157,7 @@ class SpiceUtils:
         """
 
         # Initial type conversion
-        if isinstance(filenames, str): filenames = [filenames]
+        if isinstance(filenames, str): filenames = cast(StrOrListAlias, [filenames])
 
         # Check if connected to the server through a remote drive
         drive_path = os.path.join('//idc-archive', 'SOLO', 'SPICE')
@@ -158,11 +166,11 @@ class SpiceUtils:
         else:
             main_path = os.path.join('/archive', 'SOLAR-ORBITER', 'SPICE')
 
-        fullpaths = [None] * len(filenames)
+        fullpath = cast(list[str], [None] * len(filenames))
         for i, filename in enumerate(filenames):
             d = SpiceUtils.parse_filename(filename)
             date = parse_date(d['time'])
-            fullpaths[i] = os.path.join(
+            fullpath[i] = os.path.join(
                 main_path,
                 'fits',
                 'level' + d['level'].lstrip('L'),
@@ -172,8 +180,8 @@ class SpiceUtils:
                 filename,
             )
 
-        if len(fullpaths) == 1: return fullpaths[0]
-        return fullpaths
+        if len(fullpath) == 1: return cast(StrOrListAlias, fullpath[0])
+        return cast(StrOrListAlias, fullpath)
 
 
 def get_mosaic_filenames(verbose: int = 0, flush: bool = False) -> list[str]:

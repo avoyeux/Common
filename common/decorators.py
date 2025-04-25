@@ -18,7 +18,7 @@ from typeguard import typechecked
 __all__ = ['ClassDecorator', 'Decorators']
 
 # TYPE ANNOTATIONs
-from typing import Any, cast, Type, Callable, TypeVar, overload
+from typing import Any, cast, Type, Callable, TypeVar, overload, Literal
 F = TypeVar('F', bound=Callable[..., Any])
 D = Callable[[F], any]
 T = TypeVar('T', bound=Type)
@@ -26,7 +26,10 @@ T = TypeVar('T', bound=Type)
 
 
 @typechecked
-def ClassDecorator(decorator: D, functiontype: T | str = 'all') -> Callable[[T], T]:
+def ClassDecorator(
+        decorator: D,
+        functiontype: T | Literal['regular', 'instance', 'all'] = 'all',
+    ) -> Callable[[T], T]:
     """
     Class decorator that applies a given decorator to class functions with the specified function
     type (i.e. classmethod, staticmethod, property, 'regular' or 'instance' -- for an instance
@@ -95,8 +98,8 @@ class Decorators:
     def running_time(
             func: F | None = None,
             *,
-            verbose_name: str = 'verbose',
-            flush_name: str = 'flush',
+            verbose_name: str = ...,
+            flush_name: str = ...,
         ) -> F | Callable[[F], F]: ...
 
     @staticmethod  
@@ -146,7 +149,7 @@ class Decorators:
             size: bool = False,
             flush: bool = False,
         ) -> Callable[[F], F]:
-        """  #TODO: this shouldn't yet bw finished. Needs testing from what I remember.
+        """  #TODO: this shouldn't yet be finished. Needs testing from what I remember.
         To print the argument names and information of a decorated function. You can also choose
         what should be printed.
 
@@ -242,7 +245,7 @@ class DecoratorsUtils:
                 Exception: when the decorated function didn't run.
 
             Returns:
-                any: the results of the function after running.
+                Any: the results of the function after running.
             """
             
             # CHECK function attributes

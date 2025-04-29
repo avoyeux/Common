@@ -13,10 +13,10 @@ from multiprocessing import shared_memory
 # TYPE ANNOTATIONs
 import queue
 import multiprocessing.managers
-from typing import Any, Callable, cast, TypeAlias
-ManagerQueueProxy: TypeAlias = queue.Queue  # couldn't the exact type annotation so using a parent
-IntValueProxy: TypeAlias = multiprocessing.managers.ValueProxy[int]
-SharedMemoryAlias: TypeAlias = shared_memory.SharedMemory
+from typing import Any, Callable, cast
+type ManagerQueueProxy = queue.Queue[tuple[int, Any]]  # using a parent
+type ValueProxy[T] = multiprocessing.managers.ValueProxy[T]
+type SharedMemoryAlias = shared_memory.SharedMemory
 
 # Public classes
 __all__ = ['MultiProcessing']
@@ -693,7 +693,7 @@ class MultiProcessingUtils:
 
     def _multiprocess_while_all_data(
             self,
-            shared_value: IntValueProxy,
+            shared_value: ValueProxy[int],
             output_queue: ManagerQueueProxy,
         ) -> None:
         """
@@ -750,7 +750,7 @@ class MultiProcessingUtils:
 
     def _multiprocess_while(
             self,
-            shared_value: IntValueProxy,
+            shared_value: ValueProxy[int],
             output_queue: ManagerQueueProxy,
         ) -> None:
         """
@@ -807,7 +807,7 @@ class MultiProcessingUtils:
             function_kwargs: dict[str, Any],
             data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: IntValueProxy,
+            shared_value: ValueProxy[int],
             output_queue: ManagerQueueProxy,
         ) -> None:
         """ #TODO: change docstring
@@ -848,7 +848,7 @@ class MultiProcessingUtils:
             function_kwargs: dict[str, Any],
             data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: IntValueProxy,
+            shared_value: ValueProxy[int],
             output_queue: ManagerQueueProxy,
         ) -> None:
         """ #TODO: change the docstring.
@@ -886,7 +886,7 @@ class MultiProcessingUtils:
             function_kwargs: dict[str, Any],
             data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: IntValueProxy,
+            shared_value: ValueProxy[int],
             output_queue: ManagerQueueProxy,
         ) -> None:
         """
@@ -927,7 +927,7 @@ class MultiProcessingUtils:
             function_kwargs: dict[str, Any],
             data: dict[str, Any] | np.ndarray,
             data_len: int,
-            shared_value: IntValueProxy,
+            shared_value: ValueProxy[int],
             output_queue: ManagerQueueProxy,
         ) -> None:
         """

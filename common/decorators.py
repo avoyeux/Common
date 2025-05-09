@@ -270,7 +270,7 @@ class DecoratorsUtils:
                 result = func(*args, **kwargs)
             except Exception as e:
                 raise Exception(
-                    f"\033[1;31mFunction {func.__qualname__} didn't run properly."
+                    f"\033[1;31mFunction {func.__qualname__} didn't run properly. "
                     f"The corresponding error is: {e}\033[0m"
                 )
             finally:

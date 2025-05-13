@@ -14,8 +14,10 @@ import subprocess
 import multiprocessing as mp
 
 # TYPE ANNOTATIONs
-from typing import cast, TypeVar
+from typing import cast, TypeVar, Any
 StrOrListType = TypeVar('StrOrListType', bound=str | list[str])
+type ManagerAlias = Any
+type SemaphoreAlias = Any
 
 
 
@@ -37,14 +39,34 @@ class SSHMirroredFilesystem:
         used to remove the temporary filesystem.
     """
 
+    # CONNECTIONs setup
+    _init_lock = mp.Lock()
+    max_ssh_connections: int = 10
+    _manager: ManagerAlias = None
+    _semaphore: SemaphoreAlias = None
+
     # OS
-    os_name = os.name  # to see if the user is on Windows. If so WSL is used for the bash commands
+    os_name: str = os.name  # to use WSL for the bash commands (if user on Windows OS)
 
     # DIRECTORIES
-    directory_path = tempfile.mkdtemp()  # path to the main directory of the temporary filesystem
-    directory_list: list[str] = []  # subdirectory names that were created. 
-    # Locks for the list 
+    directory_path: str = tempfile.mkdtemp()  # path to main directory of the temporary filesystem
+    directory_list: list[str] = []  # subdirectory names that were created.
+
+    # LOCK for list append 
     mp_lock = mp.Lock()
+
+    @classmethod
+    def _init_shared_ssh(cls) -> None:
+        """
+        To create the shared ssh connection manager. It is created only once and is used by all
+        instances of the class. It is used to limit the number of ssh connections to the server.
+        """
+
+        with cls._init_lock:
+            if cls._semaphore is not None: return
+
+            cls._manager = mp.Manager()
+            cls._semaphore = cls._manager.Semaphore(cls.max_ssh_connections)
 
     def __init__(
             self,
@@ -74,21 +96,24 @@ class SSHMirroredFilesystem:
                 print is outputted exactly when it is called (usually not the case when
                 multiprocessing). Defaults to False.
         """
+
+        # CHECK connection
+        SSHMirroredFilesystem._init_shared_ssh()
         
-        # Arguments
+        # ARGUMENTs
         self.host_shortcut = host_shortcut
         self.compression = compression
         self.timeout = connection_timeout
         self.verbose = verbose
         self.flush = flush
 
-        # Constants
+        # CONTROL SOCKET file
         self.ctrl_socket_filepath = os.path.join(
             tempfile.gettempdir(),
             'server_control_socket_file',
         )
 
-        # Ssh connection
+        # CONNECTION
         self._activate()
 
     def _activate(self) -> None:
@@ -198,6 +223,9 @@ class SSHMirroredFilesystem:
         # CHECK OS
         if SSHMirroredFilesystem.os_name == 'nt': bash_command = 'wsl ' + bash_command
 
+        # LOCK acquire
+        SSHMirroredFilesystem._semaphore.acquire()
+
         # RUN bash
         process = subprocess.run(bash_command, shell=True, stderr=subprocess.PIPE)
     
@@ -207,6 +235,9 @@ class SSHMirroredFilesystem:
                 "\033[1;31mFunction 'mirror' didn't get the file(s). "
                 f"Error: {process.stderr.decode().strip()}\033[0m"
             )
+        
+        # LOCK release
+        SSHMirroredFilesystem._semaphore.release()
         
         # Local filepath setup 
         length = len(remote_filepaths)
@@ -243,6 +274,21 @@ class SSHMirroredFilesystem:
                     f"Error: {error_message}\033[0m",
                     flush=self.flush,
                 )
+        
+        # DEL resources
+        SSHMirroredFilesystem.close_resources()
+
+    @classmethod
+    def close_resources(cls) -> None:
+        """
+        Tp close the manager used for the semaphore (for the upper limit in concurrent ssh
+        connections).)
+        """
+
+        if cls._manager is not None:
+            cls._manager.shutdown()
+            cls._manager = None
+            cls._semaphore = None
 
     @staticmethod
     def remote_to_local(
@@ -394,7 +440,7 @@ class SSHMirroredFilesystem:
 
                 if verbose > 0:
                     print(
-                        f"\033[37mcleanup: temporary filesystem {directory_path} removed.\033[0m"
+                        f"\033[37mCleanup: temporary filesystem {directory_path} removed.\033[0m"
                     )
             else:
                 # Remove the directories list
@@ -403,13 +449,13 @@ class SSHMirroredFilesystem:
 
                 if verbose > 0:
                     print(
-                        f"\033[37mcleanup: temporary subfolder(s) {', '.join(directories)} "
+                        f"\033[37mCleanup: temporary subfolder(s) {', '.join(directories)} "
                         f"removed from folder {directory_path}.\033[0m"
                     )
 
         elif verbose > 0:
             print(
-                f"\033[37mcleanup: temporary filesystem {directory_path} already removed.\033[0m"
+                f"\033[37mCleanup: temporary filesystem {directory_path} already removed.\033[0m"
             )
 
     @staticmethod

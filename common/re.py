@@ -6,6 +6,9 @@ Contains functions that I use in conjunction with the re module.
 # IMPORTS
 import re
 
+# API public
+__all__ = ["RE"]
+
 
 
 class RE:

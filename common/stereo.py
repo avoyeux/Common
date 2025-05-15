@@ -21,6 +21,9 @@ from .server_connection import SSHMirroredFilesystem
 from typing import cast, TypeVar
 StrOrListAlias = TypeVar('StrOrListAlias', bound=str | list[str])
 
+# API public
+__all__ = ["StereoUtils"]
+
 
 
 class StereoUtils:

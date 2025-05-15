@@ -14,14 +14,14 @@ import numpy as np
 from time import time, ctime
 from typeguard import typechecked
 
-# PUBLIC API
-__all__ = ['ClassDecorator', 'Decorators']
-
 # TYPE ANNOTATIONs
 from typing import Any, cast, Type, Callable, TypeVar, overload, Literal
 F = TypeVar('F', bound=Callable[..., Any])
 D = Callable[[F], any]
 T = TypeVar('T', bound=Type)
+
+# PUBLIC API
+__all__ = ['ClassDecorator', 'Decorators']
 
 
 

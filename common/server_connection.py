@@ -19,6 +19,9 @@ StrOrListType = TypeVar('StrOrListType', bound=str | list[str])
 type ManagerAlias = Any
 type SemaphoreAlias = Any
 
+# API public
+__all__ = ['SSHMirroredFilesystem']
+
 
 
 class SSHMirroredFilesystem:

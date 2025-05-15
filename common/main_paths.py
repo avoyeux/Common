@@ -6,6 +6,9 @@ Defaults functions for creating and checking the path.
 import os
 import sys
 
+# API public
+__all__ = ["get_root_path", "root_path"]
+
 
 
 def get_root_path() -> str:

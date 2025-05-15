@@ -16,6 +16,9 @@ import matplotlib.pyplot as plt
 # TYPE ANNOTATIONs
 from typing import Any, Generator
 
+# API public
+__all__ = ["Plot", "AnnotateAlongCurve"]
+
 
 
 class Plot:

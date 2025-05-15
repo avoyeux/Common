@@ -9,6 +9,9 @@ import numpy as np
 # IMPORTs sub
 from PIL import Image
 
+# API public
+__all__ = ["ArrayManipulation"]
+
 
 
 class ArrayManipulation:

@@ -6,6 +6,9 @@ Has functions to help with pandas operations.
 from typing import TypeVar
 T = TypeVar('T')
 
+# API public
+__all__ = ["Pandas"]
+
 
 
 class Pandas:

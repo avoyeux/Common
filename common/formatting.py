@@ -2,8 +2,11 @@
 To store function used for common formatting tasks.
 """
 
-# IMPORTS
+# IMPORTs
 import re
+
+# API public
+__all__ = ["StringFormatter"]
 
 
 

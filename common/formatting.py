@@ -138,3 +138,31 @@ class StringFormatter:
         if mb > 2: return f"{mb}MB"
         if kb > 2: return f"{kb}KB"
         return f"{nbytes}B"
+
+    @staticmethod
+    def _format_time_seconds(seconds: int | float) -> str:
+        """
+        Creates as string based on a time input in seconds. The string shows the corresponding time
+        in days, hours, minutes and seconds.
+
+        Args:
+            seconds (int | float): the time in seconds that need to be converted in a string human
+                format.
+
+        Returns:
+            str: the corresponding time given as a string with the corresponding days, hours,
+                minutes and seconds.
+        """
+
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = map(int, divmod(minutes, 60))
+        days, hours = map(int, divmod(hours, 24))
+
+        if minutes == 0:
+            return f'{round(seconds, 2)}s'
+        elif hours == 0:
+            return f'{minutes}m{round(seconds):02d}s'
+        elif days == 0:
+            return f'{hours}h{minutes:02d}m{round(seconds):02d}s'
+        else:
+            return f'{days}d{hours:02d}h{minutes:02d}m{round(seconds):02d}s'

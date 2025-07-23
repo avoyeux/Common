@@ -3,10 +3,12 @@
 
 # WHITELIST dirs
 !/common/
+!/common/**/*
 !/tests/
 
-# BLACKLIST hidden directories
+# BLACKLIST 
 **/.*/
+**/__pycache__/
 
 # WHITELIST types
 !**/*.py

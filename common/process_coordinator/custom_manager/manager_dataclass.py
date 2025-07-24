@@ -28,7 +28,7 @@ class FetchInfo:
 
     identifier: TaskIdentifier
     function: Callable
-    kwargs: dict[str, Any] = field(default_factory=dict)  # ? is this the right way to do it?
+    kwargs: dict[str, Any] = field(default_factory=dict)
 
     def __getstate__(self) -> dict[str, Any]:
         """
@@ -178,9 +178,12 @@ class SameIdentifier:
         Updates the 'full' attribute of the SameIdentifier based on the tasks_done list.
         """
 
-        # * I could just do a len() check but keeping this for now to make sure the code is doing
-        # * the right thing
-        if set(self.tasks_done) == set(range(cast(int, self.number_tasks))): self.full = True
+        self.number_tasks = cast(int, self.number_tasks)  # always an int here
+        if (
+            len(self.tasks_done) == self.number_tasks
+        ) and (
+            set(self.tasks_done) == set(range(cast(int, self.number_tasks)))
+        ): self.full = True
 
 
 @dataclass(slots=True, eq=False, repr=False, match_args=False)
@@ -246,12 +249,8 @@ class AllResults:
             for i, same_result in enumerate(self.data):
                 # FOUND result
                 if same_result.identifier == identifier:
-                    # WAIT for full results
-                    # self._wait_for_full(same_result)
-
-                    # RESULT removed
+                    # RESULT remove
                     self.data.pop(i)
-                    # self.data.remove(same_result)
                     self._lock.release()
                     return same_result.sorted()
 
@@ -280,22 +279,6 @@ class AllResults:
         
         self._lock.release()
         return False
-
-    # def _wait_for_full(self, same_results: SameResults) -> None:
-    #     """
-    #     Waits for the SameResults instance to be full.
-
-    #     Args:
-    #         same_results (SameResults): the result to wait for.
-    #     """
-
-    #     while True:
-    #         if same_results.identifier.full: return
-            
-    #         # WAIT
-    #         self._lock.release()
-    #         time.sleep(1)  # ? add it as a parameter ?
-    #         self._lock.acquire()
 
     def add(self, result: TaskResult) -> None:
         """

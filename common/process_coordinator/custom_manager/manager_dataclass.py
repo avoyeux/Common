@@ -104,7 +104,6 @@ class SameIdentifier:
     Used to regroup results together and filter the results (for the join method).
     """
 
-    # ! make sure that the first task number is 0
     # ? should I add a task_failed attribute ?
 
     full: bool = False  # if all the tasks are done
@@ -231,13 +230,13 @@ class AllResults:
     def get(self, identifier: TaskIdentifier) -> SameResults:
         """
         To get the full SameResults instance corresponding to the identifier.
-        The code will block until the corresponding full SameResults is available.
+        The code doesn't wait for the results to be ready as you should use 'results_full' prior.
 
         Args:
             identifier (TaskIdentifier): the task identifier to search the SameResults for.
 
         Returns:
-            SameResults: the corresponding full SameResults instance.
+            SameResults: the corresponding sorted full SameResults instance.
         """
 
         # SEARCH loop
@@ -248,10 +247,11 @@ class AllResults:
                 # FOUND result
                 if same_result.identifier == identifier:
                     # WAIT for full results
-                    self._wait_for_full(same_result)
+                    # self._wait_for_full(same_result)
 
                     # RESULT removed
-                    self.data.remove(same_result)
+                    self.data.pop(i)
+                    # self.data.remove(same_result)
                     self._lock.release()
                     return same_result.sorted()
 
@@ -259,21 +259,43 @@ class AllResults:
             self._lock.release()
             time.sleep(1)  # ? add it as a parameter ?
 
-    def _wait_for_full(self, same_results: SameResults) -> None:
+    def results_full(self, identifier: TaskIdentifier) -> bool:
         """
-        Waits for the SameResults instance to be full.
+        To check if the results for a given task identifier are ready.
 
         Args:
-            same_results (SameResults): the result to wait for.
+            identifier (TaskIdentifier): the identifier unique to each task sent to the manager.
+
+        Returns:
+            bool: True if the results are ready, False otherwise.
         """
 
-        while True:
-            if same_results.identifier.full: return
+        # CHECK loop
+        self._lock.acquire()
+        for same_result in self.data:
+            if same_result.identifier == identifier:
+                full = same_result.identifier.full
+                self._lock.release()
+                return full
+        
+        self._lock.release()
+        return False
+
+    # def _wait_for_full(self, same_results: SameResults) -> None:
+    #     """
+    #     Waits for the SameResults instance to be full.
+
+    #     Args:
+    #         same_results (SameResults): the result to wait for.
+    #     """
+
+    #     while True:
+    #         if same_results.identifier.full: return
             
-            # WAIT
-            self._lock.release()
-            time.sleep(1)  # ? add it as a parameter ?
-            self._lock.acquire()
+    #         # WAIT
+    #         self._lock.release()
+    #         time.sleep(1)  # ? add it as a parameter ?
+    #         self._lock.acquire()
 
     def add(self, result: TaskResult) -> None:
         """

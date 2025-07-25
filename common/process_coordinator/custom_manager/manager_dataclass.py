@@ -7,11 +7,11 @@ from __future__ import annotations
 import time
 
 # IMPORTs sub
+from threading import Lock
 from dataclasses import dataclass, field
 
 # TYPE ANNOTATIONs
 from typing import Any, cast, Self, Callable
-from threading import Lock
 
 # API public
 __all__ = ['FetchInfo', 'TaskIdentifier', 'TaskResult', 'AllResults']
@@ -61,8 +61,8 @@ class TaskIdentifier:
     """
 
     index: int
-    number_tasks: int
     process_id: int
+    number_tasks: int  # total number of tasks in the group if full
 
     def __getstate__(self) -> dict[str, int]:
         """
@@ -124,10 +124,7 @@ class SameIdentifier:
         """
 
         if isinstance(other, (TaskIdentifier, SameIdentifier)):
-            return all([
-                self.process_id == other.process_id,
-                self.number_tasks == other.number_tasks,
-            ])
+            return self.process_id == other.process_id
         else:
             raise NotImplementedError(
                 f"Cannot compare SameIdentifier with {type(other)}."
@@ -150,7 +147,7 @@ class SameIdentifier:
         if self.process_id is None:
             self.process_id = identifier.process_id
             self.number_tasks = identifier.number_tasks
-        
+            
         # UPDATE full
         self._update_full()
     
@@ -167,7 +164,6 @@ class SameIdentifier:
 
         if all([
             self.process_id is None or self.process_id == identifier.process_id,
-            self.number_tasks is None or self.number_tasks == identifier.number_tasks,
             identifier.index not in self.tasks_done,
         ]):
             return True

@@ -15,7 +15,7 @@ from multiprocessing.managers import BaseManager
 from .manager_dataclass import TaskResult, TaskIdentifier, AllResults, FetchInfo
 
 # TYPE ANNOTATIONs
-from typing import Any, Protocol, cast, Iterable, TYPE_CHECKING
+from typing import Any, Protocol, cast, Iterable, Callable, Generator, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..task_allocator import ProcessCoordinator  # ! gives a circular import
     from multiprocessing.synchronize import Lock as mp_lock
@@ -40,8 +40,9 @@ class CustomManagerProtocol(Protocol):
 
     def List(self) -> List:
         """
-        Simple empty list used as a stack to store TaskValue items.
-        No Locks or list length checks before the .pop(). Implement them outside.
+        A list used as a stack to store the tasks to submit and generate the submission when the
+        processors ask for them.
+        No Locks. Implement them outside.
         """
         ...
 
@@ -87,8 +88,6 @@ class Integer:
 
         # LOCK n DATA
         self.value = 0
-        self.count = -1
-        self._lock_count = threading.Lock()
 
     def get(self) -> int:
         """
@@ -116,53 +115,192 @@ class Integer:
 
         self.value -= 1
 
-    def next(self) -> int:
-        """
-        Get the next unique identifier for a task group.
-
-        Returns:
-            int: the next unique identifier for a task group.
-        """
-
-        with self._lock_count: self.count += 1
-        return self.count
-
 
 class List:
     """
-    Simple empty list used as a stack to store TaskValue items.
-    No Locks or list length checks before the .pop(). Implement them outside.
+    A list used as a stack to store the tasks to submit and generate the submission when the
+    workers ask for them.
+    Also keeps track of the number of tasks in the stack and create the unique identifier for each
+    task group.
+    No Locks. Implement them outside.
     """
 
     def __init__(self) -> None:
         """
         Initialize an empty list to store TaskValue items.
-        Done to have a simple stack. No Locks or anything as the ProcessCoordinator does the
-        locking and checking. (Have to to make sure there are no sudden stops).
+        The list is used as a stack to store the tasks to submit and generate the submission when
+        the workers ask for them.
+        Also keeps track of the number of tasks in the stack and create the unique identifier for
+        each task group.
+        No Locks. Implement them outside.
         """
 
-        self._list: list[TaskValue] = []
+        self._list: list[
+            tuple[
+                Generator[int | None, None, None],
+                int,
+                int,
+                Callable[..., Any],
+                Generator[dict[str, Any], None, None],
+                ProcessCoordinator | None,
+            ]
+        ] = []
+        self._unique_id: int = -1
+        self._count: int = 0
 
-    
-    def put(self, value: TaskValue) -> None:
+    def put(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            function_kwargs:
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = {},
+            coordinator: ProcessCoordinator | None = None,
+        ) -> TaskIdentifier:
         """
-        Add a value to the list.
+        Submits a group of tasks to the input stack.
+        If you are planning to also submit tasks inside this call, then you should pass the
+        'ProcessCoordinator' instance to the function. Make sure that 'function' has a
+        'coordinator' keyword argument that will be set to the ProcessCoordinator instance.
 
         Args:
-            value (TaskValue): the value to add to the list.
-        """
-
-        self._list.append(value)
-    
-    def get(self) -> TaskValue:
-        """
-        Get a value from the list.
+            number_of_tasks (int): the number of tasks to submit.
+            function (Callable[..., Any]): the function to run for each task.
+            function_kwargs (
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ],
+            optional): the keyword arguments for the function. If the arguments have to be
+                different for each tasks, then a tuple containing a generator callable and the args
+                for the generator (as a tuple too) should be passed. The generator should yield
+                the keyword arguments for each task. Keep in mind that the generator callable
+                should be picklable, i.e. must be defined as a function or as a top level class
+                static method. Defaults to an empty dict.
+            coordinator (ProcessCoordinator | None, optional): the coordinator instance to
+                associate with the tasks. Used if you want to do some nested multiprocessing.
+                Defaults to None.
 
         Returns:
-            TaskValue: the value from the list. raises an IndexError if the list is empty.
+            TaskIdentifier: the identifier of the task(s) that were just added to the stack.
         """
 
-        return self._list.pop()  # ! WRONG; but actual implementation does a check and lock
+        if isinstance(function_kwargs, dict):
+            generator = self._input_generator(number_of_tasks, function_kwargs)
+        else:
+            gen, args = function_kwargs
+            generator = gen(*args)
+
+        # INDEX generator
+        index_generator = self._index_generator(number_of_tasks)
+        
+        # ADD tasks to waiting list
+        self._count += number_of_tasks
+        self._unique_id += 1
+        self._list.append((
+            index_generator,
+            number_of_tasks,
+            self._unique_id,
+            function,
+            generator,
+            coordinator,
+        ))
+        
+        # IDENTIFIER to find results
+        identifier = TaskIdentifier(
+            index=0,
+            process_id=self._unique_id,
+            number_tasks=number_of_tasks,
+        )
+        return identifier
+
+    def get(self) -> TaskValue:
+        """
+        To get a task from the input stack.
+        The information of the stack are gotten from generators to save RAM and keep track.
+
+        Returns:
+            TaskValue: the corresponding task to be run by the workers.
+        """
+
+        while True:
+            index_generator, nb, p_id, function, kwargs_generator, coordinator = self._list[-1]
+
+            # CHECK generator
+            index = next(index_generator)
+            if index is not None: break
+
+            # POP finished tasks
+            self._list.pop()
+        
+        # GET kwargs
+        self._count -= 1
+        kwargs = next(kwargs_generator)
+
+        # FORMAT FetchInfo
+        fetch_info = FetchInfo(
+            identifier=TaskIdentifier(
+                index=index,
+                process_id=p_id,
+                number_tasks=nb,
+            ),
+            function=function,
+            kwargs=kwargs,
+        )
+        return fetch_info, coordinator
+
+    def empty(self) -> bool:
+        """
+        To check if there is no more tasks in the input stack.
+        Cannot just check the results length as the last item is never popped.
+
+        Returns:
+            bool: True if no more tasks. 
+        """
+
+        return self._count == 0
+
+    def _index_generator(
+            self,
+            number_of_tasks: int,
+        ) -> Generator[int | None, None, None]:
+        """
+        Generator to yield the index of the task in the input stack.
+
+        Args:
+            number_of_tasks (int): the number of tasks to generate indices for.
+
+        Yields:
+            Generator[int | None, None, None]: the generator yielding the indices of the tasks.
+                Yields None when all indices have been generated.
+        """
+
+        for i in range(number_of_tasks): yield i
+        yield None  # done
+
+    def _input_generator(
+            self,
+            number_of_tasks: int,
+            function_kwargs: dict[str, Any],
+        ) -> Generator[dict[str, Any], None, None]:
+        """
+        Generator to yield the keyword arguments for each task.
+        Only used if the arguments are the same for each task.
+
+        Args:
+            number_of_tasks (int): the number of tasks to generate keyword arguments for.
+            function_kwargs (dict[str, Any]): the function kwargs to yield.
+
+        Yields:
+            Generator[dict[str, Any], None, None]: the generator yielding the keyword arguments for
+                each task.
+        """
+
+        for _ in range(number_of_tasks): yield function_kwargs
 
 
 class Results:
@@ -197,6 +335,7 @@ class Results:
         Args:
             task_identifier (TaskIdentifier): the identifier unique to each task sent to the
                 manager.
+            data (Any): the data to add to the results queue.
         """
 
         result = TaskResult(identifier=task_identifier, data=data)

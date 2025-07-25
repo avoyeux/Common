@@ -12,10 +12,10 @@ import time
 import multiprocessing as mp
 
 # IMPORTs local
-from .custom_manager import CustomManager, TaskIdentifier, FetchInfo
+from .custom_manager import CustomManager, TaskIdentifier
 
 # TYPE ANNOTATIONs
-from typing import Any, Self, Callable, TYPE_CHECKING
+from typing import Any, Self, Callable, Generator, TYPE_CHECKING
 if TYPE_CHECKING:
     from multiprocessing.synchronize import Lock as mp_lock
     from .custom_manager.multiprocessing_manager import Results, Integer, List
@@ -64,8 +64,7 @@ class ProcessCoordinator:
         self._manager_lock = self._manager.Lock()
         self._input_stack: List = self._manager.List()
         self._results = self._manager.Results()
-        self._input_integer = self._manager.Integer()
-        self._integer_results = self._manager.Integer()
+        self._integer = self._manager.Integer()
 
         # CREATE processes
         self._processes: list[mp.Process] | None = self._create_processes()
@@ -83,8 +82,7 @@ class ProcessCoordinator:
             "_flush": self._flush,
             "_input_stack": self._input_stack,
             "_results": self._results,
-            "_input_integer": self._input_integer,
-            "_integer_results": self._integer_results,
+            "_integer": self._integer,
             "_manager_lock": self._manager_lock,
             "_processes": None,
         }
@@ -134,7 +132,12 @@ class ProcessCoordinator:
             self,
             number_of_tasks: int,
             function: Callable,  # ? change it to list[Callable] ?
-            function_kwargs: dict[str, Any] | list[dict[str, Any]] = {},
+            function_kwargs: 
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = {},
             coordinator: ProcessCoordinator | None = None,
         ) -> TaskIdentifier:
         """
@@ -146,9 +149,18 @@ class ProcessCoordinator:
         Args:
             number_of_tasks (int): the number of tasks to submit.
             function (Callable): the function to run for each task.
-            function_kwargs (dict[str, Any] | list[dict[str, Any]], optional):
-                the keyword arguments to pass to the function. If a list is given, then each task
-                will have its own set of keyword arguments. Defaults to {}.
+            function_kwargs (
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ],
+            optional): the keyword arguments for the function. If the arguments have to be
+                different for each tasks, then a tuple containing a generator callable and the args
+                for the generator (as a tuple too) should be passed. The generator should yield
+                the keyword arguments for each task. Keep in mind that the generator callable
+                should be picklable, i.e. must be defined as a function or as a top level class
+                static method. Defaults to an empty dict.
             coordinator (ProcessCoordinator | None, optional): the coordinator to pass to the
                 function. Only do so if you want to do some nested multiprocessing.
                 Defaults to None.
@@ -159,70 +171,21 @@ class ProcessCoordinator:
 
         # COUNT group of tasks
         self._manager_lock.acquire()
-        self._integer_results.plus()  # count nb of results in waiting
-        self._manager_lock.release()
+        self._integer.plus()  # count nb of results in waiting
         
-        # SEND tasks
-        process_id = self._input_integer.next()  # unique identifier for the task group
-        if isinstance(function_kwargs, dict):
-            # SUBMIT tasks
-            for i in range(number_of_tasks):
-                task_input = FetchInfo(
-                    identifier=TaskIdentifier(
-                        index=i,
-                        number_tasks=number_of_tasks,
-                        process_id=process_id,
-                    ),
-                    function=function,
-                    kwargs=function_kwargs,
-                )
-
-                # COUNT n SEND
-                self._manager_lock.acquire()
-                self._input_integer.plus()  # count nb of tasks in stack
-                self._input_stack.put((task_input, coordinator))
-                self._manager_lock.release()
-        else:
-            # CHECK number
-            if not self._check_submit(number_of_tasks, function_kwargs):
-                if self._verbose > 0:
-                    print(
-                        f"\033[1;31mError: number of tasks ({number_of_tasks}) does not match the "
-                        f"number of function kwargs ({len(function_kwargs)}). Using the number of "
-                        "arguments as the number of tasks.\033[0m",
-                        flush=self._flush,
-                    )
-                number_of_tasks = len(function_kwargs)
-            
-            # SUBMIT tasks
-            for i, kwargs in enumerate(function_kwargs):
-                task_input = FetchInfo(
-                    identifier=TaskIdentifier(
-                        index=i,
-                        number_tasks=number_of_tasks,
-                        process_id=process_id,
-                    ),
-                    function=function,
-                    kwargs=kwargs,
-                )
-
-                # COUNT n SEND
-                self._manager_lock.acquire()
-                self._input_integer.plus()  # count nb of tasks in stack
-                self._input_stack.put((task_input, coordinator))
-                self._manager_lock.release()
+        # SEND task package
+        identifier = self._input_stack.put(
+            number_of_tasks=number_of_tasks,
+            function=function,
+            function_kwargs=function_kwargs,
+            coordinator=coordinator,
+        )
+        self._manager_lock.release()
         
         # PROCESSEs start
         if self._processes is not None:
             for p in self._processes: p.start()
-
-        # IDENTIFIER to get the right results later
-        task_identifier = TaskIdentifier(
-            index=0,
-            number_tasks=number_of_tasks,
-            process_id=process_id,
-        )
-        return task_identifier
+        return identifier
     
     def results(self, task_identifier: TaskIdentifier) -> list[Any]:
         """
@@ -241,15 +204,11 @@ class ProcessCoordinator:
         # CHECK if results ready
         while not self._results.results_full(task_identifier):
 
-            # CHECK left tasks
-            # if self._integer.get() <= 0: print('done', flush=True); break
-
             # NEW task processing
             if self._single_worker_process(
                 input_stack=self._input_stack,
                 results=self._results,
-                input_integer=self._input_integer,
-                results_integer=self._integer_results,
+                integer=self._integer,
                 manager_lock=self._manager_lock,
                 ):
                 time.sleep(1)
@@ -257,7 +216,7 @@ class ProcessCoordinator:
         # READY to get results
         results = self._results.results(task_identifier)
         self._manager_lock.acquire()
-        self._integer_results.minus()
+        self._integer.minus()
         self._manager_lock.release()
         return results
 
@@ -274,8 +233,7 @@ class ProcessCoordinator:
         kwargs = {
             'input_stack': self._input_stack,
             'results': self._results,
-            'input_integer': self._input_integer,
-            'results_integer': self._integer_results,
+            'integer': self._integer,
             'manager_lock': self._manager_lock,
         }
 
@@ -283,15 +241,14 @@ class ProcessCoordinator:
         processes = [
             mp.Process(target=self._worker_process, kwargs=kwargs)
             for _ in range(self._total_processes)
-        ]  # * no need to start before finishing creation as jobs won't be submitted before
+        ]  # * start done later to make sure that there are always tasks being done.
         return processes
 
     @staticmethod
     def _worker_process(
             input_stack: List,
             results: Results,
-            input_integer: Integer,
-            results_integer: Integer,
+            integer: Integer,
             manager_lock: mp_lock,
         ) -> None:
         """
@@ -309,10 +266,8 @@ class ProcessCoordinator:
         while True:
             # CHECK input
             manager_lock.acquire()
-            check = ProcessCoordinator._check_input_n_outputs(input_integer, results_integer)
-            if check:
-                fetch = input_stack.get() # input ready
-                input_integer.minus()  # count down the number of tasks in stack
+            check = ProcessCoordinator._check_input_n_outputs(input_stack, integer)
+            if check: fetch = input_stack.get() # input ready
             manager_lock.release()
             if check is None: return  # all tasks done
             if not check: time.sleep(1); continue # wait for more tasks
@@ -335,13 +290,13 @@ class ProcessCoordinator:
                 )
     
     @staticmethod
-    def _check_input_n_outputs(input_integer: Integer, results_integer: Integer) -> bool | None:
+    def _check_input_n_outputs(input_stack: List, integer: Integer) -> bool | None:
         """
         To check if there are tasks in the input stack and if there are results in waiting.
         Hence, it is done to check if the worker process should continue processing tasks or not.
 
         Args:
-            input_integer (Integer): integer to track the number of tasks in the input stack.
+            input_stack (List): the stack to get the tasks from.
             results_integer (Integer): integer to track the number of results in waiting.
 
         Returns:
@@ -349,9 +304,9 @@ class ProcessCoordinator:
                 (False). 
         """
 
-        input_value = input_integer.get()
-        result_value = results_integer.get()
-        if input_value <= 0:
+        input_check = input_stack.empty()
+        result_value = integer.get()
+        if input_check:
             if result_value <= 0: return None  # all tasks done
             return False  # wait for results
         return True  # input ready to process
@@ -360,8 +315,7 @@ class ProcessCoordinator:
     def _single_worker_process(
             input_stack: List,
             results: Results,
-            input_integer: Integer,
-            results_integer: Integer,
+            integer: Integer,
             manager_lock: mp_lock,
         ) -> bool:
         """
@@ -371,8 +325,7 @@ class ProcessCoordinator:
         Args:
             input_stack (List): the stack to get the tasks from.
             results (Results): the output stack to sort the results.
-            input_integer (Integer): the integer to track the number of tasks in the input stack.
-            results_integer (Integer): the integer to track the number of results in waiting.
+            integer (Integer): the integer to track the number of results in waiting.
             manager_lock (mp_lock): the lock to synchronize access to the manager.
 
         Returns:
@@ -381,10 +334,8 @@ class ProcessCoordinator:
 
         # CHECK input
         manager_lock.acquire()
-        check = ProcessCoordinator._check_input_n_outputs(input_integer, results_integer)
-        if check:
-            fetch = input_stack.get()  # input ready
-            input_integer.minus()
+        check = ProcessCoordinator._check_input_n_outputs(input_stack, integer)
+        if check: fetch = input_stack.get()  # input ready
         manager_lock.release()
         if check is None: raise ValueError("Problem: no results left where there should be.")
         if not check: return True  # wait for results
@@ -407,33 +358,34 @@ class ProcessCoordinator:
             )
             return False
 
-    def _check_submit(self, number_of_tasks: int, function_kwargs: list[dict[str, Any]]) -> bool:
-        """
-        To check if the number of tasks and function kwargs match.
-
-        Args:
-            number_of_tasks (int): the number of tasks to submit.
-            function_kwargs (list[dict[str, Any]]): the function keyword arguments to pass to the
-                function for each task.
-
-        Returns:
-            bool: true if the number of tasks and function kwargs match, false otherwise.
-        """
-
-        if number_of_tasks != len(function_kwargs): return False
-        return True
-
 
 
 if __name__ == "__main__":
-    from common import Decorators
+    from common import Decorators, ProcessCoordinator
+    from typing import Any, Generator
+
+
+    def kwargs_generator_inside(processes: int, x: int) -> Generator[dict[str, Any], None, None]:
+        """
+        A simple generator to create keyword arguments for the task function.
+        """
+        for i in range(processes): yield {"x": x, "y": i}
+
+    def kwargs_generator_outside(processes: int) -> Generator[dict[str, Any], None, None]:
+        """
+        A simple generator to create keyword arguments for the task function.
+        """
+        for i in range(processes): yield {"x": i}
 
     @Decorators.running_time
     def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
         task_id = coordinator.submit_tasks(
             number_of_tasks=50,
             function=task_function,
-            function_kwargs=[{"x": x, "y": i} for i in range(50)]
+            function_kwargs=(
+                kwargs_generator_inside,
+                (50, x),
+            ),
         )
         
         # Wait for results
@@ -445,16 +397,19 @@ if __name__ == "__main__":
         A simple task function to test the ProcessCoordinator.
         """
         [None for _ in range(10000) for j in range(1000)]  # Simulate some work
-
+        print(f"Task {x} - {y} done", flush=True)
         return (x, y)
 
     @Decorators.running_time
     def run():
-        with ProcessCoordinator(total_processes=14) as coordinator:
+        with ProcessCoordinator(total_processes=5) as coordinator:
             task_id = coordinator.submit_tasks(
-                number_of_tasks=50,
+                number_of_tasks=10,
                 function=main_worker,
-                function_kwargs=[{"x": i} for i in range(50)], 
+                function_kwargs=(
+                    kwargs_generator_outside,
+                    (10,),
+                ), 
                 coordinator=coordinator,
             )
             

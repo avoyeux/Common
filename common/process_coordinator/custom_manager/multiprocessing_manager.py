@@ -15,11 +15,13 @@ from multiprocessing.managers import BaseManager
 from .manager_dataclass import TaskResult, TaskIdentifier, AllResults, FetchInfo
 
 # TYPE ANNOTATIONs
-from typing import Any, Protocol, cast, Iterable, Callable, Generator, TYPE_CHECKING
+from typing import (
+    Any, Protocol, cast, Iterable, Callable, Generator, overload, Literal, TYPE_CHECKING,
+)
 if TYPE_CHECKING:
     from ..task_allocator import ProcessCoordinator  # ! gives a circular import
     from multiprocessing.synchronize import Lock as mp_lock
-type TaskValue = tuple[FetchInfo, ProcessCoordinator| None]
+type TaskValue = tuple[FetchInfo, ProcessCoordinator| None, bool]
 
 # API public
 __all__ = ['CustomManager', 'TaskValue']
@@ -146,6 +148,7 @@ class List:
                 Callable[..., Any],
                 Generator[dict[str, Any], None, None],
                 ProcessCoordinator | None,
+                bool,
             ]
         ] = []
         self._unique_id: int = -1
@@ -154,10 +157,57 @@ class List:
         # LOCK
         self._lock = threading.Lock()
 
+    @overload
     def put(
             self,
             number_of_tasks: int,
             function: Callable[..., Any],
+            results: Literal[True] = ...,
+            function_kwargs:
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = ...,
+            coordinator: ProcessCoordinator | None = ...,
+        ) -> TaskIdentifier: ...
+
+    @overload
+    def put(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            results: Literal[False],
+            function_kwargs:
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = ...,
+            coordinator: ProcessCoordinator | None = ...,
+        ) -> None: ...
+
+    # FALLBACK
+    @overload
+    def put(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            results: bool = ...,
+            function_kwargs:
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = ...,
+            coordinator: ProcessCoordinator | None = ...,
+        ) -> TaskIdentifier | None: ...
+
+    def put(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            results: bool = True,
             function_kwargs:
                 dict[str, Any] |
                 tuple[
@@ -165,7 +215,7 @@ class List:
                     tuple[Any, ...],
                 ] = {},
             coordinator: ProcessCoordinator | None = None,
-        ) -> TaskIdentifier:
+        ) -> TaskIdentifier | None:
         """
         todo update docstring
         Submits a group of tasks to the input stack.
@@ -216,8 +266,9 @@ class List:
             function,
             generator,
             coordinator,
+            results,
         ))
-        
+        if not results: self._lock.release(); return  # no results expected
         # IDENTIFIER to find results
         identifier = TaskIdentifier(
             index=0,
@@ -239,7 +290,9 @@ class List:
 
         self._lock.acquire()
         while True:
-            index_generator, nb, p_id, function, kwargs_generator, coordinator = self._list[-1]
+            index_generator, nb, p_id, function, kwargs_generator, coordinator, results = (
+                self._list[-1]
+            )
 
             # CHECK generator
             index = next(index_generator)
@@ -262,7 +315,7 @@ class List:
             function=function,
             kwargs=kwargs,
         )
-        return fetch_info, coordinator
+        return fetch_info, coordinator, results
 
     def empty(self) -> bool:
         """

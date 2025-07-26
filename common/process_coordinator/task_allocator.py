@@ -15,7 +15,7 @@ import multiprocessing as mp
 from .custom_manager import CustomManager, TaskIdentifier
 
 # TYPE ANNOTATIONs
-from typing import Any, Self, Callable, Generator, TYPE_CHECKING
+from typing import Any, Self, Callable, Generator, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     from multiprocessing.synchronize import Lock as mp_lock
     from .custom_manager.multiprocessing_manager import Results, Integer, List
@@ -136,10 +136,57 @@ class ProcessCoordinator:
 
         self.__exit__()
 
+    @overload
+    def submit_tasks(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            results: Literal[True] = ...,
+            function_kwargs: 
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = ...,
+            coordinator: ProcessCoordinator | None = ...,
+        ) -> TaskIdentifier: ...
+    
+    @overload
+    def submit_tasks(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            results: Literal[False],
+            function_kwargs:
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = ...,
+            coordinator: ProcessCoordinator | None = ...,
+        ) -> None: ...
+    
+    # FALLBACK
+    @overload
+    def submit_tasks(
+            self,
+            number_of_tasks: int,
+            function: Callable[..., Any],
+            results: bool = ...,
+            function_kwargs:
+                dict[str, Any] |
+                tuple[
+                    Callable[..., Generator[dict[str, Any], None, None]],
+                    tuple[Any, ...],
+                ] = ...,
+            coordinator: ProcessCoordinator | None = ...,
+        ) -> TaskIdentifier | None: ...
+
     def submit_tasks(
             self,
             number_of_tasks: int,
             function: Callable,  # ? change it to list[Callable] ?
+            results: bool = True,
             function_kwargs: 
                 dict[str, Any] |
                 tuple[
@@ -147,8 +194,9 @@ class ProcessCoordinator:
                     tuple[Any, ...],
                 ] = {},
             coordinator: ProcessCoordinator | None = None,
-        ) -> TaskIdentifier:
+        ) -> TaskIdentifier | None:
         """
+        todo update docstring
         To submit a task to the input stack.
         If you are planning to also submit tasks inside this call, then you should pass the
         'ProcessCoordinator' instance to the function. Make sure that 'function' has a 
@@ -178,9 +226,10 @@ class ProcessCoordinator:
         """
 
         # COUNT group of tasks
-        self._manager_lock.acquire()
-        self._integer.plus()  # count nb of results in waiting
-        self._manager_lock.release()
+        if results:
+            self._manager_lock.acquire()
+            self._integer.plus()  # count nb of results in waiting
+            self._manager_lock.release()
 
         # SEND task package
         identifier = self._input_stack.put(
@@ -188,6 +237,7 @@ class ProcessCoordinator:
             function=function,
             function_kwargs=function_kwargs,
             coordinator=coordinator,
+            results=results,
         )
         
         # PROCESSEs start
@@ -281,7 +331,7 @@ class ProcessCoordinator:
             if not check: time.sleep(1); continue # wait for more tasks
 
             # FETCH task
-            fetch, coordinator = fetch
+            fetch, coordinator, result = fetch
             if coordinator is not None: fetch.kwargs['coordinator'] = coordinator
 
             # PROCESS run
@@ -292,10 +342,7 @@ class ProcessCoordinator:
                 output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
             finally:
                 # PROCESS output
-                results.put(
-                    task_identifier=fetch.identifier,
-                    data=output,
-                )
+                if result: results.put(task_identifier=fetch.identifier, data=output)
     
     @staticmethod
     def _check_input_n_outputs(input_stack: List, integer: Integer) -> bool | None:
@@ -349,7 +396,7 @@ class ProcessCoordinator:
         if not check: return True  # wait for results
 
         # FETCH task
-        fetch, coordinator = fetch
+        fetch, coordinator, result = fetch
         if coordinator is not None: fetch.kwargs['coordinator'] = coordinator
 
         # PROCESS run
@@ -360,10 +407,7 @@ class ProcessCoordinator:
             output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
         finally:
             # PROCESS output
-            results.put(
-                task_identifier=fetch.identifier,
-                data=output,
-            )
+            if result: results.put(task_identifier=fetch.identifier, data=output)
             return False
 
 
@@ -386,7 +430,7 @@ if __name__ == "__main__":
         for i in range(processes): yield {"x": i}
 
     @Decorators.running_time
-    def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
+    def main_worker(x: int, coordinator: ProcessCoordinator) -> None:
         task_id = coordinator.submit_tasks(
             number_of_tasks=50,
             function=task_function,
@@ -394,11 +438,12 @@ if __name__ == "__main__":
                 kwargs_generator_inside,
                 (50, x),
             ),
+            results=False,
         )
         
         # Wait for results
-        results = coordinator.results(task_id)
-        return results
+        # results = coordinator.results(task_id)
+        return 
 
     def task_function(x: int, y: int) -> tuple[int, int]:
         """
@@ -410,7 +455,7 @@ if __name__ == "__main__":
 
     @Decorators.running_time
     def run():
-        with ProcessCoordinator(workers=5) as coordinator:
+        with ProcessCoordinator(workers=20) as coordinator:
             task_id = coordinator.submit_tasks(
                 number_of_tasks=10,
                 function=main_worker,

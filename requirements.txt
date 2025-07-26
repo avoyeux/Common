@@ -1,6 +1,5 @@
 astropy==7.0.0
 astropy-iers-data==0.2025.1.6.0.33.42
--e git+ssh://git@github.com/avoyeux/Common.git@84ff275d70002239f80e081ea1cbe640879edcda#egg=common
 contourpy==1.3.2
 cycler==0.12.1
 fonttools==4.59.0

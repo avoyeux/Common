@@ -25,19 +25,27 @@ all = ['ProcessCoordinator']
 
 # todo need to add a more efficient method if no return value is needed
 # ! right now calling '.results()' when nested multiprocessing is mandatory regardless of the need
-
+# todo need to also be able to decide on the number of managers needed.
 
 
 class ProcessCoordinator:
     """
+    todo update docstring
     Creates a set number of processes once and uses them to run tasks.
     Nested multiprocessing is supported by passing the coordinator instance to the workers.
     Keep in mind that the target function will need a 'coordinator' if wanting to use nested
     multiprocessing.
     """
 
-    def __init__(self, total_processes: int, verbose: int = 1, flush: bool = False) -> None:
+    def __init__(
+            self,
+            workers: int,
+            managers: int = 1,
+            verbose: int = 1,
+            flush: bool = False,
+        ) -> None:
         """
+        todo update docstring
         Initializes the ProcessCoordinator with a set number of processes.
         It will create a set number of processes once and uses them to run tasks.
         Nested multiprocessing is supported by passing the coordinator instance to the workers.
@@ -51,7 +59,7 @@ class ProcessCoordinator:
         """
 
         # ATTRIBUTEs from args
-        self._total_processes = total_processes - 1  # * keeping one for the manager
+        self._total_processes = workers - 1  # * main process is also running hence -1
 
         # ATTRIBUTEs settings
         self._verbose = verbose
@@ -61,7 +69,7 @@ class ProcessCoordinator:
         manager = CustomManager()
         manager.start()
         self._manager = manager
-        self._manager_lock = self._manager.Lock()
+        self._manager_lock = self._manager.Lock()  # ! not sure if needed but should work with it
         self._input_stack: List = self._manager.List()
         self._results = self._manager.Results()
         self._integer = self._manager.Integer()
@@ -172,7 +180,8 @@ class ProcessCoordinator:
         # COUNT group of tasks
         self._manager_lock.acquire()
         self._integer.plus()  # count nb of results in waiting
-        
+        self._manager_lock.release()
+
         # SEND task package
         identifier = self._input_stack.put(
             number_of_tasks=number_of_tasks,
@@ -180,7 +189,6 @@ class ProcessCoordinator:
             function_kwargs=function_kwargs,
             coordinator=coordinator,
         )
-        self._manager_lock.release()
         
         # PROCESSEs start
         if self._processes is not None:
@@ -267,8 +275,8 @@ class ProcessCoordinator:
             # CHECK input
             manager_lock.acquire()
             check = ProcessCoordinator._check_input_n_outputs(input_stack, integer)
-            if check: fetch = input_stack.get() # input ready
             manager_lock.release()
+            if check: fetch = input_stack.get() # input ready
             if check is None: return  # all tasks done
             if not check: time.sleep(1); continue # wait for more tasks
 
@@ -335,8 +343,8 @@ class ProcessCoordinator:
         # CHECK input
         manager_lock.acquire()
         check = ProcessCoordinator._check_input_n_outputs(input_stack, integer)
-        if check: fetch = input_stack.get()  # input ready
         manager_lock.release()
+        if check: fetch = input_stack.get()  # input ready
         if check is None: raise ValueError("Problem: no results left where there should be.")
         if not check: return True  # wait for results
 
@@ -402,7 +410,7 @@ if __name__ == "__main__":
 
     @Decorators.running_time
     def run():
-        with ProcessCoordinator(total_processes=5) as coordinator:
+        with ProcessCoordinator(workers=5) as coordinator:
             task_id = coordinator.submit_tasks(
                 number_of_tasks=10,
                 function=main_worker,

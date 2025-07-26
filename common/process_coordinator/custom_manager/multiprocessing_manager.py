@@ -40,6 +40,7 @@ class CustomManagerProtocol(Protocol):
 
     def List(self) -> List:
         """
+        todo update docstring
         A list used as a stack to store the tasks to submit and generate the submission when the
         processors ask for them.
         No Locks. Implement them outside.
@@ -118,6 +119,7 @@ class Integer:
 
 class List:
     """
+    todo update docstring
     A list used as a stack to store the tasks to submit and generate the submission when the
     workers ask for them.
     Also keeps track of the number of tasks in the stack and create the unique identifier for each
@@ -127,6 +129,7 @@ class List:
 
     def __init__(self) -> None:
         """
+        todo update docstring
         Initialize an empty list to store TaskValue items.
         The list is used as a stack to store the tasks to submit and generate the submission when
         the workers ask for them.
@@ -148,6 +151,9 @@ class List:
         self._unique_id: int = -1
         self._count: int = 0
 
+        # LOCK
+        self._lock = threading.Lock()
+
     def put(
             self,
             number_of_tasks: int,
@@ -161,6 +167,7 @@ class List:
             coordinator: ProcessCoordinator | None = None,
         ) -> TaskIdentifier:
         """
+        todo update docstring
         Submits a group of tasks to the input stack.
         If you are planning to also submit tasks inside this call, then you should pass the
         'ProcessCoordinator' instance to the function. Make sure that 'function' has a
@@ -199,6 +206,7 @@ class List:
         index_generator = self._index_generator(number_of_tasks)
         
         # ADD tasks to waiting list
+        self._lock.acquire()
         self._count += number_of_tasks
         self._unique_id += 1
         self._list.append((
@@ -216,10 +224,12 @@ class List:
             process_id=self._unique_id,
             number_tasks=number_of_tasks,
         )
+        self._lock.release()
         return identifier
 
     def get(self) -> TaskValue:
         """
+        todo explain that empty() needs to be called before to have the right count
         To get a task from the input stack.
         The information of the stack are gotten from generators to save RAM and keep track.
 
@@ -227,6 +237,7 @@ class List:
             TaskValue: the corresponding task to be run by the workers.
         """
 
+        self._lock.acquire()
         while True:
             index_generator, nb, p_id, function, kwargs_generator, coordinator = self._list[-1]
 
@@ -238,8 +249,8 @@ class List:
             self._list.pop()
         
         # GET kwargs
-        self._count -= 1
         kwargs = next(kwargs_generator)
+        self._lock.release()
 
         # FORMAT FetchInfo
         fetch_info = FetchInfo(
@@ -255,6 +266,7 @@ class List:
 
     def empty(self) -> bool:
         """
+        todo update docstring
         To check if there is no more tasks in the input stack.
         Cannot just check the results length as the last item is never popped.
 
@@ -262,8 +274,12 @@ class List:
             bool: True if no more tasks. 
         """
 
-        return self._count == 0
-
+        self._lock.acquire()
+        check = (self._count == 0)
+        if not check: self._count -= 1  # promise to use a task
+        self._lock.release()
+        return check
+    
     def _index_generator(
             self,
             number_of_tasks: int,

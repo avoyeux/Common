@@ -12,13 +12,15 @@ import time
 import multiprocessing as mp
 
 # IMPORTs local
-from .custom_manager import CustomManager, TaskIdentifier
+from .custom_manager import TaskIdentifier
+from .manager_allocator import ManagerAllocator
+
 
 # TYPE ANNOTATIONs
 from typing import Any, Self, Callable, Generator, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     from multiprocessing.synchronize import Lock as mp_lock
-    from .custom_manager.multiprocessing_manager import Results, Integer, List
+    from .custom_manager.multiprocessing_manager import Results, Integer, Stack
 
 # API public
 all = ['ProcessCoordinator']
@@ -40,7 +42,7 @@ class ProcessCoordinator:
     def __init__(
             self,
             workers: int,
-            managers: int = 1,
+            managers: int | tuple[int, int] = 1,
             verbose: int = 1,
             flush: bool = False,
         ) -> None:
@@ -66,13 +68,8 @@ class ProcessCoordinator:
         self._flush = flush
 
         # SETUP manager
-        manager = CustomManager()
-        manager.start()
+        manager = ManagerAllocator(managers=managers, verbose=self._verbose - 1, flush=self._flush)
         self._manager = manager
-        self._manager_lock = self._manager.Lock()  # ! not sure if needed but should work with it
-        self._input_stack: List = self._manager.List()
-        self._results = self._manager.Results()
-        self._integer = self._manager.Integer()
 
         # CREATE processes
         self._processes: list[mp.Process] | None = self._create_processes()
@@ -88,10 +85,7 @@ class ProcessCoordinator:
         state = {
             "_verbose": self._verbose,
             "_flush": self._flush,
-            "_input_stack": self._input_stack,
-            "_results": self._results,
-            "_integer": self._integer,
-            "_manager_lock": self._manager_lock,
+            "_manager": self._manager,
             "_processes": None,
         }
         return state
@@ -225,27 +219,21 @@ class ProcessCoordinator:
             TaskIdentifier: the identifier of the task(s) that was(were) just submitted.
         """
 
-        # COUNT group of tasks
-        if results:
-            self._manager_lock.acquire()
-            self._integer.plus()  # count nb of results in waiting
-            self._manager_lock.release()
-
-        # SEND task package
-        identifier = self._input_stack.put(
+        # SEND to manager
+        identifier = self._manager.submit(
             number_of_tasks=number_of_tasks,
             function=function,
+            results=results,
             function_kwargs=function_kwargs,
             coordinator=coordinator,
-            results=results,
         )
-        
+
         # PROCESSEs start
         if self._processes is not None:
             for p in self._processes: p.start()
         return identifier
     
-    def results(self, task_identifier: TaskIdentifier) -> list[Any]:
+    def give(self, task_identifier: TaskIdentifier) -> list[Any]:
         """
         To get the results of a group of tasks.
         If the results are not ready yet, it will run another task to completion and get back to
@@ -260,22 +248,13 @@ class ProcessCoordinator:
         """
         
         # CHECK if results ready
-        while not self._results.results_full(task_identifier):
+        while not self._manager.full(task_identifier):
 
             # NEW task processing
-            if self._single_worker_process(
-                input_stack=self._input_stack,
-                results=self._results,
-                integer=self._integer,
-                manager_lock=self._manager_lock,
-                ):
-                time.sleep(1)
+            if self._single_worker_process(): time.sleep(1)
 
         # READY to get results
-        results = self._results.results(task_identifier)
-        self._manager_lock.acquire()
-        self._integer.minus()
-        self._manager_lock.release()
+        results = self._manager.give(task_identifier)
         return results
 
     def _create_processes(self) -> list[mp.Process]:
@@ -288,12 +267,7 @@ class ProcessCoordinator:
         """
 
         # PROCESS kwargs
-        kwargs = {
-            'input_stack': self._input_stack,
-            'results': self._results,
-            'integer': self._integer,
-            'manager_lock': self._manager_lock,
-        }
+        kwargs = {'manager': self._manager}
 
         # CREATE processes
         processes = [
@@ -303,12 +277,7 @@ class ProcessCoordinator:
         return processes
 
     @staticmethod
-    def _worker_process(
-            input_stack: List,
-            results: Results,
-            integer: Integer,
-            manager_lock: mp_lock,
-        ) -> None:
+    def _worker_process(manager: ManagerAllocator) -> None:
         """
         To run the worker process that will fetch the tasks from the input stack and put the
         results into the results stack.
@@ -323,11 +292,11 @@ class ProcessCoordinator:
 
         while True:
             # CHECK input
-            manager_lock.acquire()
-            check = ProcessCoordinator._check_input_n_outputs(input_stack, integer)
-            manager_lock.release()
-            if check: fetch = input_stack.get() # input ready
-            if check is None: return  # all tasks done
+            check = manager.check()
+            if check: fetch = manager.get() # input ready
+            if check is None: 
+                print(f"\033[1;31mExiting a worker\033[0m", flush=manager._flush)
+                return  # all tasks done
             if not check: time.sleep(1); continue # wait for more tasks
 
             # FETCH task
@@ -342,38 +311,13 @@ class ProcessCoordinator:
                 output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
             finally:
                 # PROCESS output
-                if result: results.put(task_identifier=fetch.identifier, data=output)
-    
-    @staticmethod
-    def _check_input_n_outputs(input_stack: List, integer: Integer) -> bool | None:
+                if manager._verbose > 1: 
+                    print(f"Task {fetch.identifier.process_id} done.", flush=manager._flush)
+                if result: manager.sort(identifier=fetch.identifier, data=output)
+
+    def _single_worker_process(self) -> bool:
         """
-        To check if there are tasks in the input stack and if there are results in waiting.
-        Hence, it is done to check if the worker process should continue processing tasks or not.
-
-        Args:
-            input_stack (List): the stack to get the tasks from.
-            results_integer (Integer): integer to track the number of results in waiting.
-
-        Returns:
-            bool | None: the boolean indicating if there are tasks to process (True) or not
-                (False). 
-        """
-
-        input_check = input_stack.empty()
-        result_value = integer.get()
-        if input_check:
-            if result_value <= 0: return None  # all tasks done
-            return False  # wait for results
-        return True  # input ready to process
-
-    @staticmethod
-    def _single_worker_process(
-            input_stack: List,
-            results: Results,
-            integer: Integer,
-            manager_lock: mp_lock,
-        ) -> bool:
-        """
+        todo update docstring
         To run a single worker process that will fetch on task from the input stack and put the
         result into the results stack.
 
@@ -388,11 +332,16 @@ class ProcessCoordinator:
         """
 
         # CHECK input
-        manager_lock.acquire()
-        check = ProcessCoordinator._check_input_n_outputs(input_stack, integer)
-        manager_lock.release()
-        if check: fetch = input_stack.get()  # input ready
-        if check is None: raise ValueError("Problem: no results left where there should be.")
+        check = self._manager.check()
+        if check: fetch = self._manager.get()  # input ready
+        if check is None:
+            print(
+                "\033[1;31mERROR: no tasks and results left. Shouldn't happen here. "
+                "Raising ValueError to stop the process. The post processing will not work if "
+                "a return value is expected. \033[0m",
+                flush=self._flush,
+            )
+            raise ValueError("Problem: no results left where there should be.")
         if not check: return True  # wait for results
 
         # FETCH task
@@ -407,7 +356,10 @@ class ProcessCoordinator:
             output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
         finally:
             # PROCESS output
-            if result: results.put(task_identifier=fetch.identifier, data=output)
+            if result:
+                if self._verbose > 1: 
+                    print(f"Task {fetch.identifier.process_id} done.", flush=self._flush)
+                self._manager.sort(identifier=fetch.identifier, data=output)
             return False
 
 
@@ -430,7 +382,7 @@ if __name__ == "__main__":
         for i in range(processes): yield {"x": i}
 
     @Decorators.running_time
-    def main_worker(x: int, coordinator: ProcessCoordinator) -> None:
+    def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
         task_id = coordinator.submit_tasks(
             number_of_tasks=50,
             function=task_function,
@@ -438,24 +390,25 @@ if __name__ == "__main__":
                 kwargs_generator_inside,
                 (50, x),
             ),
-            results=False,
+            results=True,
         )
         
         # Wait for results
-        # results = coordinator.results(task_id)
-        return 
+        results = coordinator.give(task_id)
+        print(f"results for task {x}: {results}", flush=True)
+        return results
 
     def task_function(x: int, y: int) -> tuple[int, int]:
         """
         A simple task function to test the ProcessCoordinator.
         """
         [None for _ in range(10000) for j in range(1000)]  # Simulate some work
-        print(f"Task {x} - {y} done", flush=True)
+        # print(f"Task {x} - {y} done", flush=True)
         return (x, y)
 
     @Decorators.running_time
     def run():
-        with ProcessCoordinator(workers=20) as coordinator:
+        with ProcessCoordinator(workers=19, managers=(1, 1), verbose=5, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(
                 number_of_tasks=10,
                 function=main_worker,
@@ -467,7 +420,7 @@ if __name__ == "__main__":
             )
             
             # Wait for results
-            results = coordinator.results(task_id)
+            results = coordinator.give(task_id)
             print(f'Final results: {results}', flush=True)
         print("ProcessCoordinator exited cleanly.")
     run()

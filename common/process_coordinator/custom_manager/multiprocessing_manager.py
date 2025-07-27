@@ -40,13 +40,17 @@ class CustomManagerProtocol(Protocol):
         """
         ...
 
-    def List(self) -> List:
+    def Stack(self) -> Stack:
         """
         todo update docstring
         A list used as a stack to store the tasks to submit and generate the submission when the
         processors ask for them.
         No Locks. Implement them outside.
         """
+        ...
+
+    def StackTracker(self) -> StackTracker:
+        # todo add docstring
         ...
 
     def Results(self) -> Results:
@@ -79,6 +83,7 @@ class CustomManagerProtocol(Protocol):
 
 class Integer:
     """
+    todo update docstring and most likely add a lock
     A super simple class to save an integer in the manager.
     """
 
@@ -89,39 +94,101 @@ class Integer:
         One to get a unique identifier for each task group.
         """
 
-        # LOCK n DATA
-        self.value = 0
+        # DATA
+        self._value = 0
+        self._lock = threading.Lock()
 
-    def get(self) -> int:
+    # def get(self) -> int:
+    #     """
+    #     Get the integer value.
+
+    #     Returns:
+    #         int: the integer value.
+    #     """
+
+    #     return self.value
+
+    def plus(self, number: int = 1) -> int:
         """
-        Get the integer value.
-
-        Returns:
-            int: the integer value.
-        """
-
-        return self.value
-
-    def plus(self) -> None:
-        """
+        todo update docstring
         Increment the integer value by 1.
         This method is thread-safe.
         """
 
-        self.value += 1
+        self._lock.acquire()
+        self._value += number
+        value = self._value
+        self._lock.release()
+        return value
     
-    def minus(self) -> None:
+    def minus(self, number: int = 1) -> None:
         """
+        todo update docstring
         Decrement the integer value by 1.
         This method is thread-safe.
         """
 
-        self.value -= 1
+        self._lock.acquire()
+        self._value -= number
+        self._lock.release()
 
 
-class List:
+class StackTracker:
+    # todo add docstring
+
+    def __init__(self) -> None:
+        # todo add docstring
+
+        # LOCK n DATA
+        self._lock = threading.Lock()
+        self._list: list[tuple[int, Generator[bool | None, None, None]]] = []
+
+    # def __next__(self) -> int:
+    #     # todo add docstring
+    #     # * this should be able to keep track of the tasks left in each queue even if there is no
+    #     # * lock between this and the worker get calls.
+
+    #     self._lock.acquire()
+    #     while True:
+    #         value, generator = self._list[-1]
+    #         next_value = next(generator)
+
+    #         if next_value: break
+    #         self._list.pop()  # remove finished generator
+    #     self._lock.release()
+    #     return value
+
+    def next(self) -> int:
+        # todo add docstring
+        # * this should be able to keep track of the tasks left in each queue even if there is no
+        # * lock between this and the worker get calls.
+
+        self._lock.acquire()
+        while True:
+            value, generator = self._list[-1]
+            exists = next(generator)
+
+            if exists: break
+            self._list.pop()  # remove finished generator
+        self._lock.release()
+        return value
+
+    def add(self, stack_index: int, number_of_tasks: int) -> None:
+        # todo add docstring
+
+        self._lock.acquire()
+        self._list.append((stack_index, self._generator(number_of_tasks)))
+        self._lock.release()
+
+    def _generator(self, number_of_tasks: int) -> Generator[bool | None, None, None]:
+        # todo add docstring
+
+        for i in range(number_of_tasks): yield True
+        yield False  # done
+
+
+class Stack:
     """
-    todo update docstring
     A list used as a stack to store the tasks to submit and generate the submission when the
     workers ask for them.
     Also keeps track of the number of tasks in the stack and create the unique identifier for each
@@ -140,6 +207,7 @@ class List:
         No Locks. Implement them outside.
         """
 
+        # STACK init
         self._list: list[
             tuple[
                 Generator[int | None, None, None],
@@ -151,7 +219,8 @@ class List:
                 bool,
             ]
         ] = []
-        self._unique_id: int = -1
+
+        # METADATA
         self._count: int = 0
 
         # LOCK
@@ -160,6 +229,7 @@ class List:
     @overload
     def put(
             self,
+            unique_id: int,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: Literal[True] = ...,
@@ -175,6 +245,7 @@ class List:
     @overload
     def put(
             self,
+            unique_id: int,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: Literal[False],
@@ -191,6 +262,7 @@ class List:
     @overload
     def put(
             self,
+            unique_id: int,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: bool = ...,
@@ -205,6 +277,7 @@ class List:
 
     def put(
             self,
+            unique_id: int,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: bool = True,
@@ -258,11 +331,10 @@ class List:
         # ADD tasks to waiting list
         self._lock.acquire()
         self._count += number_of_tasks
-        self._unique_id += 1
         self._list.append((
             index_generator,
             number_of_tasks,
-            self._unique_id,
+            unique_id,
             function,
             generator,
             coordinator,
@@ -272,7 +344,7 @@ class List:
         # IDENTIFIER to find results
         identifier = TaskIdentifier(
             index=0,
-            process_id=self._unique_id,
+            process_id=unique_id,
             number_tasks=number_of_tasks,
         )
         self._lock.release()
@@ -319,6 +391,7 @@ class List:
 
     def empty(self) -> bool:
         """
+        # ? is it deprecated because of the ManagerAllocator ?
         todo update docstring
         To check if there is no more tasks in the input stack.
         Cannot just check the results length as the last item is never popped.
@@ -374,6 +447,7 @@ class List:
 
 class Results:
     """
+    todo update docstring
     To handle the adding and getting results from tasks.
     put() method to add results and results() method to get the sorted results from the same set of
     tasks. Hence, the results method is blocking until that set of results is complete while the
@@ -410,7 +484,7 @@ class Results:
         result = TaskResult(identifier=task_identifier, data=data)
         with self._lock: self._results_queue.append(result)
 
-    def results(self, identifier: TaskIdentifier) -> list[Any]:
+    def give(self, identifier: TaskIdentifier) -> list[Any]:
         """
         To get the results the same group of tasks.
         Keep in mind that you should first check results_full() to ensure that the results are
@@ -427,7 +501,7 @@ class Results:
         same_results = self._all_results.get(identifier)
         return [task.data for task in same_results.data]
     
-    def results_full(self, identifier: TaskIdentifier) -> bool:
+    def full(self, identifier: TaskIdentifier) -> bool:
         """
         To check if the results for a given task identifier are ready.
 
@@ -499,9 +573,10 @@ class CustomManager(BaseManager):
 
 # MANAGER registration
 CustomManager.register("Lock", Lock)
-CustomManager.register("List", List)
+CustomManager.register("Stack", Stack)
 CustomManager.register("Integer", Integer)
 CustomManager.register("Results", Results)
+CustomManager.register("StackTracker", StackTracker)
 
 
 

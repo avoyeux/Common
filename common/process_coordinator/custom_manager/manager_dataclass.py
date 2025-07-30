@@ -11,12 +11,10 @@ from threading import Lock
 from dataclasses import dataclass, field
 
 # TYPE ANNOTATIONs
-from typing import Any, cast, Self, Callable
+from typing import Any, Callable
 
 # API public
 __all__ = ['FetchInfo', 'TaskIdentifier', 'TaskResult', 'AllResults']
-
-# todo need to see if there is a better way to wait than use time sleep
 
 
 
@@ -61,8 +59,9 @@ class TaskIdentifier:
     """
 
     index: int
-    process_id: int
-    number_tasks: int  # total number of tasks in the group if full
+    group_id: int
+    total_tasks: int  # total number of tasks in the group if full
+    group_tasks: int
 
     def __getstate__(self) -> dict[str, int]:
         """
@@ -106,10 +105,10 @@ class SameIdentifier:
 
     # ? should I add a task_failed attribute ?
 
-    full: bool = False  # if all the tasks are done
-    process_id: int | None = None
-    number_tasks: int | None = None
-    tasks_done: list[int] = field(default_factory=list)
+    full: bool = False  # all group queue tasks done
+    group_id: int | None = None  # unique ID for a group of tasks
+    number_tasks: int | None = None  # total number of tasks in the same group same queue
+    tasks_done: list[int] = field(default_factory=list)  # list of group task indexes done
 
     def __eq__(self, other: object) -> bool:
         """
@@ -124,7 +123,7 @@ class SameIdentifier:
         """
 
         if isinstance(other, (TaskIdentifier, SameIdentifier)):
-            return self.process_id == other.process_id
+            return self.group_id == other.group_id
         else:
             raise NotImplementedError(
                 f"Cannot compare SameIdentifier with {type(other)}."
@@ -144,9 +143,10 @@ class SameIdentifier:
         self.tasks_done.append(identifier.index)
 
         # CHECK empty
-        if self.process_id is None:
-            self.process_id = identifier.process_id
-            self.number_tasks = identifier.number_tasks
+        if self.group_id is None:
+            self.group_id = identifier.group_id
+            self.number_tasks = identifier.group_tasks  # ! is that the problem ?
+
             
         # UPDATE full
         self._update_full()
@@ -163,7 +163,7 @@ class SameIdentifier:
         """
 
         if all([
-            self.process_id is None or self.process_id == identifier.process_id,
+            self.group_id is None or self.group_id == identifier.group_id,
             identifier.index not in self.tasks_done,
         ]):
             return True
@@ -174,12 +174,7 @@ class SameIdentifier:
         Updates the 'full' attribute of the SameIdentifier based on the tasks_done list.
         """
 
-        self.number_tasks = cast(int, self.number_tasks)  # always an int here
-        if (
-            len(self.tasks_done) == self.number_tasks
-        ) and (
-            set(self.tasks_done) == set(range(cast(int, self.number_tasks)))
-        ): self.full = True
+        if len(self.tasks_done) == self.number_tasks: self.full = True
 
 
 @dataclass(slots=True, eq=False, repr=False, match_args=False)
@@ -202,19 +197,6 @@ class SameResults:
 
         self.identifier.add(result.identifier)
         self.data.append(result)
-    
-    def sorted(self) -> Self:
-        """
-        Sorts the data list by index.
-        That means that after sorting, the data is in the same order than the initial tasks.
-
-        Returns:
-            Self: the SameResults instance with the data list sorted.
-        """
-
-        self.identifier.tasks_done.sort()
-        self.data.sort(key=lambda data: data.identifier.index)
-        return self
 
 
 @dataclass(slots=True, eq=False, repr=False, match_args=False)
@@ -248,11 +230,11 @@ class AllResults:
                     # RESULT remove
                     self.data.pop(i)
                     self._lock.release()
-                    return same_result.sorted()
+                    return same_result
 
-            # WAIT
-            self._lock.release()
-            time.sleep(1)  # ? add it as a parameter ?
+            # # WAIT
+            # self._lock.release()
+            # time.sleep(1)  # ? add it as a parameter ?
 
     def results_full(self, identifier: TaskIdentifier) -> bool:
         """

@@ -8,19 +8,15 @@ import time
 import threading
 
 # IMPORTs sub
-from multiprocessing import Lock
 from multiprocessing.managers import BaseManager
 
 # IMPORTs local
 from .manager_dataclass import TaskResult, TaskIdentifier, AllResults, FetchInfo
 
 # TYPE ANNOTATIONs
-from typing import (
-    Any, Protocol, cast, Iterable, Callable, Generator, overload, Literal, TYPE_CHECKING,
-)
+from typing import Any, Protocol, cast, Iterable, Callable, Generator, TYPE_CHECKING
 if TYPE_CHECKING:
     from ..task_allocator import ProcessCoordinator  # ! gives a circular import
-    from multiprocessing.synchronize import Lock as mp_lock
 type TaskValue = tuple[FetchInfo, ProcessCoordinator| None, bool]
 
 # API public
@@ -35,36 +31,35 @@ class CustomManagerProtocol(Protocol):
 
     def Integer(self) -> Integer:
         """
-        Create an shared integer that can be used to store and manipulate an integer value.
-        'plus' to add 1 and 'minus' to subtract 1. Starting value is 0.
+        Create an integer proxy that can be used to store and manipulate an integer value.
+        'plus' to add a value and 'minus' to subtract a value. Starting value is 0.
+        Lock implemented internally.
         """
         ...
 
     def Stack(self) -> Stack:
         """
-        todo update docstring
-        A list used as a stack to store the tasks to submit and generate the submission when the
-        processors ask for them.
-        No Locks. Implement them outside.
+        Proxy stack to store the tasks to submit and sends them to the workers when asked for it.
+        Lock implemented internally.
         """
         ...
 
-    def StackTracker(self) -> StackTracker:
-        # todo add docstring
+    def IndexTracker(self) -> IndexTracker:
+        """
+        To create a proxy index tracker to keep track of the next queue index to use for the next
+        task.
+        Lock implemented internally.
+        """
         ...
 
     def Results(self) -> Results:
         """
-        To handle the adding and getting results from tasks.
-        put() method to add results and results() method to get the sorted results from the same
-        set of tasks. Hence, the results method is blocking until that set of results is complete
-        while the put method waits for a lock to add the result to a sorting queue.
-        """
-        ...
-
-    def Lock(self) -> mp_lock:
-        """
-        Returns a proxy to a non-recursive lock object
+        Proxy to handle the adding and getting results from tasks.
+        'put' method to add results and 'give' method to get the sorted results from the same set
+        of tasks. Keep in mind that the 'give' method doesn't wait for the results to be ready and
+        as such you should first check the return of the 'full' method to ensure that the results
+        are ready.
+        Lock implemented internally.
         """
         ...
 
@@ -83,36 +78,32 @@ class CustomManagerProtocol(Protocol):
 
 class Integer:
     """
-    todo update docstring and most likely add a lock
-    A super simple class to save an integer in the manager.
+    A super simple class to have an integer value inside the custom manager.
+    Lock implemented internally.
     """
 
     def __init__(self) -> None:
         """
-        Create two instances of 0.
-        One to store the number of tasks groups finished.
-        One to get a unique identifier for each task group.
+        Create an instance of 0.
+        The class uses a 'plus' and 'minus' method to change the value. Both methods return the
+        current value after the operation.
+
+        A lock is implemented internally.
         """
 
         # DATA
         self._value = 0
         self._lock = threading.Lock()
 
-    # def get(self) -> int:
-    #     """
-    #     Get the integer value.
-
-    #     Returns:
-    #         int: the integer value.
-    #     """
-
-    #     return self.value
-
     def plus(self, number: int = 1) -> int:
         """
-        todo update docstring
-        Increment the integer value by 1.
-        This method is thread-safe.
+        Increment the integer value by a given value.
+        
+        Args:
+            number (int, optional): the value to add to the integer. Defaults to 1
+
+        Returns:
+            int: the integer value after the operation.
         """
 
         self._lock.acquire()
@@ -121,96 +112,134 @@ class Integer:
         self._lock.release()
         return value
     
-    def minus(self, number: int = 1) -> None:
+    def minus(self, number: int = 1) -> int:
         """
-        todo update docstring
-        Decrement the integer value by 1.
-        This method is thread-safe.
+        Decrement the integer value by a given value.
+
+        Args:
+            number (int, optional): the value to subtract from the integer. Defaults to 1.
+
+        Returns:
+            int: the integer value after the operation.
         """
 
         self._lock.acquire()
         self._value -= number
-        self._lock.release()
-
-
-class StackTracker:
-    # todo add docstring
-
-    def __init__(self) -> None:
-        # todo add docstring
-
-        # LOCK n DATA
-        self._lock = threading.Lock()
-        self._list: list[tuple[int, Generator[bool | None, None, None]]] = []
-
-    # def __next__(self) -> int:
-    #     # todo add docstring
-    #     # * this should be able to keep track of the tasks left in each queue even if there is no
-    #     # * lock between this and the worker get calls.
-
-    #     self._lock.acquire()
-    #     while True:
-    #         value, generator = self._list[-1]
-    #         next_value = next(generator)
-
-    #         if next_value: break
-    #         self._list.pop()  # remove finished generator
-    #     self._lock.release()
-    #     return value
-
-    def next(self) -> int:
-        # todo add docstring
-        # * this should be able to keep track of the tasks left in each queue even if there is no
-        # * lock between this and the worker get calls.
-
-        self._lock.acquire()
-        while True:
-            value, generator = self._list[-1]
-            exists = next(generator)
-
-            if exists: break
-            self._list.pop()  # remove finished generator
+        value = self._value
         self._lock.release()
         return value
 
-    def add(self, stack_index: int, number_of_tasks: int) -> None:
-        # todo add docstring
+
+class IndexTracker:
+    """
+    A class to keep track of the next queue index to use for the next task.
+    This class has an internal lock implemented.
+    """
+
+    def __init__(self) -> None:
+        """
+        Initialize an empty list to store the queue index generators.
+
+        The instance is created to then use the 'add' method and 'next' method on it.
+        It will ensure that you use the right queue index to submit the next task to.
+        """
+
+        # LOCK n DATA
+        self._lock = threading.Lock()
+        self._list: list[tuple[
+            Generator[int, None, None],
+            Generator[bool | None, None, None]
+        ]] = []
+
+    def next(self) -> int:
+        """
+        To get the next queue index to use for the next task.
+
+        Returns:
+            int: the next queue index to use.
+        """
 
         self._lock.acquire()
-        self._list.append((stack_index, self._generator(number_of_tasks)))
+        while True:
+            index_generator, length_generator = self._list[-1]
+            exists = next(length_generator)
+
+            if exists: break
+            self._list.pop()  # remove finished generator
+        value = next(index_generator)
+        self._lock.release()
+        return value
+
+    def add(self, number_of_tasks: int, number_of_queues: int) -> None:
+        """
+        To add a new group of tasks to the index tracker.
+
+        Args:
+            number_of_tasks (int): the number of tasks in the group.
+            number_of_queues (int): the number of queues to create for the tasks.
+        """
+
+        self._lock.acquire()
+        self._list.append((
+            self._index_generator(number_of_queues),
+            self._length_checker(number_of_tasks)
+        ))
         self._lock.release()
 
-    def _generator(self, number_of_tasks: int) -> Generator[bool | None, None, None]:
-        # todo add docstring
+    def _length_checker(self, group_tasks: int) -> Generator[bool | None, None, None]:
+        """
+        Creates a generator to stop when all group tasks have been called.
+        It yields True the number of times there are tasks and then yields False to tell the user
+        to stop.
 
-        for i in range(number_of_tasks): yield True
+        Args:
+            group_tasks (int): the number of tasks in the group.
+
+        Yields:
+            Generator[bool | None, None, None]: yields True the number of times there are tasks
+                and then yields False to tell the user to stop.
+        """
+
+        for _ in range(group_tasks): yield True
         yield False  # done
+
+    def _index_generator(self, nb_of_queues: int) -> Generator[int, None, None]:
+        """
+        Creates a generator that yields the index of the queue to use for the next task.
+        To do so, it just generates indices from 0 to nb_of_queues - 1 and then loops back to 0.
+
+        Args:
+            nb_of_queues (int): the number of queues to create indices for.
+
+        Yields:
+            Generator[int, None, None]: yields the index of the queue to use for the next task.
+        """
+
+        while True:
+            for i in range(nb_of_queues): yield i
 
 
 class Stack:
     """
     A list used as a stack to store the tasks to submit and generate the submission when the
     workers ask for them.
-    Also keeps track of the number of tasks in the stack and create the unique identifier for each
-    task group.
-    No Locks. Implement them outside.
+    Lock implemented internally.
     """
 
     def __init__(self) -> None:
         """
-        todo update docstring
         Initialize an empty list to store TaskValue items.
         The list is used as a stack to store the tasks to submit and generate the submission when
         the workers ask for them.
-        Also keeps track of the number of tasks in the stack and create the unique identifier for
-        each task group.
-        No Locks. Implement them outside.
+
+        Lock implemented internally.
         """
 
         # STACK init
         self._list: list[
             tuple[
                 Generator[int | None, None, None],
+                int,
                 int,
                 int,
                 Callable[..., Any],
@@ -220,141 +249,75 @@ class Stack:
             ]
         ] = []
 
-        # METADATA
-        self._count: int = 0
-
         # LOCK
         self._lock = threading.Lock()
 
-    @overload
     def put(
             self,
-            unique_id: int,
-            number_of_tasks: int,
-            function: Callable[..., Any],
-            results: Literal[True] = ...,
-            function_kwargs:
-                dict[str, Any] |
-                tuple[
-                    Callable[..., Generator[dict[str, Any], None, None]],
-                    tuple[Any, ...],
-                ] = ...,
-            coordinator: ProcessCoordinator | None = ...,
-        ) -> TaskIdentifier: ...
-
-    @overload
-    def put(
-            self,
-            unique_id: int,
-            number_of_tasks: int,
-            function: Callable[..., Any],
-            results: Literal[False],
-            function_kwargs:
-                dict[str, Any] |
-                tuple[
-                    Callable[..., Generator[dict[str, Any], None, None]],
-                    tuple[Any, ...],
-                ] = ...,
-            coordinator: ProcessCoordinator | None = ...,
-        ) -> None: ...
-
-    # FALLBACK
-    @overload
-    def put(
-            self,
-            unique_id: int,
-            number_of_tasks: int,
-            function: Callable[..., Any],
-            results: bool = ...,
-            function_kwargs:
-                dict[str, Any] |
-                tuple[
-                    Callable[..., Generator[dict[str, Any], None, None]],
-                    tuple[Any, ...],
-                ] = ...,
-            coordinator: ProcessCoordinator | None = ...,
-        ) -> TaskIdentifier | None: ...
-
-    def put(
-            self,
-            unique_id: int,
-            number_of_tasks: int,
+            group_id: int,
+            total_tasks: int,
+            first_task_index: int,
+            last_task_index: int,
             function: Callable[..., Any],
             results: bool = True,
-            function_kwargs:
-                dict[str, Any] |
-                tuple[
-                    Callable[..., Generator[dict[str, Any], None, None]],
-                    tuple[Any, ...],
-                ] = {},
+            same_kwargs: dict[str, Any] = {},
+            different_kwargs: dict[str, list[Any]] = {},
             coordinator: ProcessCoordinator | None = None,
-        ) -> TaskIdentifier | None:
+        ) -> None:
         """
-        todo update docstring
         Submits a group of tasks to the input stack.
         If you are planning to also submit tasks inside this call, then you should pass the
         'ProcessCoordinator' instance to the function. Make sure that 'function' has a
         'coordinator' keyword argument that will be set to the ProcessCoordinator instance.
 
         Args:
-            number_of_tasks (int): the number of tasks to submit.
+            group_id (int): the unique ID for the group of tasks.
+            total_tasks (int): the total number of tasks in the group. This is not the same thing
+                that the number of group tasks inside this queue, but represents the total number
+                of tasks for that same group across all queues.
+            first_task_index (int): the index of the first task in the group for this queue.
+            last_task_index (int): the index of the last task in the group for this queue.
             function (Callable[..., Any]): the function to run for each task.
-            function_kwargs (
-                dict[str, Any] |
-                tuple[
-                    Callable[..., Generator[dict[str, Any], None, None]],
-                    tuple[Any, ...],
-                ],
-            optional): the keyword arguments for the function. If the arguments have to be
-                different for each tasks, then a tuple containing a generator callable and the args
-                for the generator (as a tuple too) should be passed. The generator should yield
-                the keyword arguments for each task. Keep in mind that the generator callable
-                should be picklable, i.e. must be defined as a function or as a top level class
-                static method. Defaults to an empty dict.
+            results (bool, optional): whether to return the results of the tasks. Defaults to True.
+            same_kwargs (dict[str, Any], optional): the keyword arguments that are the same for
+                all tasks in this group. Defaults to {}.
+            different_kwargs (dict[str, list[Any]], optional): the keyword arguments that are
+                different for each task in this group. The tasks will each take one element of the
+                list for each key. Defaults to {}.
             coordinator (ProcessCoordinator | None, optional): the coordinator instance to
                 associate with the tasks. Used if you want to do some nested multiprocessing.
                 Defaults to None.
-
-        Returns:
-            TaskIdentifier: the identifier of the task(s) that were just added to the stack.
         """
 
-        if isinstance(function_kwargs, dict):
-            generator = self._input_generator(number_of_tasks, function_kwargs)
-        else:
-            gen, args = function_kwargs
-            generator = gen(*args)
+        nb_of_tasks = last_task_index - first_task_index + 1
+        generator = self._input_generator(nb_of_tasks, same_kwargs, different_kwargs)
 
         # INDEX generator
-        index_generator = self._index_generator(number_of_tasks)
+        index_generator = self._index_generator(
+            first_index=first_task_index,
+            last_index=last_task_index,
+        )
         
         # ADD tasks to waiting list
         self._lock.acquire()
-        self._count += number_of_tasks
         self._list.append((
             index_generator,
-            number_of_tasks,
-            unique_id,
+            nb_of_tasks,
+            total_tasks,
+            group_id,
             function,
             generator,
             coordinator,
             results,
         ))
-        if not results: self._lock.release(); return  # no results expected
-        # IDENTIFIER to find results
-        identifier = TaskIdentifier(
-            index=0,
-            process_id=unique_id,
-            number_tasks=number_of_tasks,
-        )
         self._lock.release()
-        return identifier
 
     def get(self) -> TaskValue:
         """
-        todo explain that empty() needs to be called before to have the right count
         To get a task from the input stack.
         The information of the stack are gotten from generators to save RAM and keep track.
+        This method will only work if the stack is not empty, hence you first need to run a code
+        making sure that the stack itself is not empty.
 
         Returns:
             TaskValue: the corresponding task to be run by the workers.
@@ -362,9 +325,10 @@ class Stack:
 
         self._lock.acquire()
         while True:
-            index_generator, nb, p_id, function, kwargs_generator, coordinator, results = (
-                self._list[-1]
-            )
+            (
+                index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
+                coordinator, results,
+            ) = self._list[-1]
 
             # CHECK generator
             index = next(index_generator)
@@ -381,77 +345,69 @@ class Stack:
         fetch_info = FetchInfo(
             identifier=TaskIdentifier(
                 index=index,
-                process_id=p_id,
-                number_tasks=nb,
+                group_id=group_id,
+                total_tasks=total_tasks,
+                group_tasks=group_tasks,
             ),
             function=function,
             kwargs=kwargs,
         )
         return fetch_info, coordinator, results
-
-    def empty(self) -> bool:
-        """
-        # ? is it deprecated because of the ManagerAllocator ?
-        todo update docstring
-        To check if there is no more tasks in the input stack.
-        Cannot just check the results length as the last item is never popped.
-
-        Returns:
-            bool: True if no more tasks. 
-        """
-
-        self._lock.acquire()
-        check = (self._count == 0)
-        if not check: self._count -= 1  # promise to use a task
-        self._lock.release()
-        return check
     
     def _index_generator(
             self,
-            number_of_tasks: int,
+            first_index: int,
+            last_index: int,
         ) -> Generator[int | None, None, None]:
         """
         Generator to yield the index of the task in the input stack.
 
         Args:
-            number_of_tasks (int): the number of tasks to generate indices for.
+            first_index (int): the index of the first task in the group for this queue.
+            last_index (int): the index of the last task in the group for this queue.
 
         Yields:
             Generator[int | None, None, None]: the generator yielding the indices of the tasks.
                 Yields None when all indices have been generated.
         """
 
-        for i in range(number_of_tasks): yield i
+        for i in range(first_index, last_index + 1): yield i
         yield None  # done
 
     def _input_generator(
             self,
             number_of_tasks: int,
-            function_kwargs: dict[str, Any],
+            same_kwargs: dict[str, Any],
+            different_kwargs: dict[str, list[Any]],
         ) -> Generator[dict[str, Any], None, None]:
         """
         Generator to yield the keyword arguments for each task.
-        Only used if the arguments are the same for each task.
 
         Args:
             number_of_tasks (int): the number of tasks to generate keyword arguments for.
-            function_kwargs (dict[str, Any]): the function kwargs to yield.
+            same_kwargs (dict[str, Any]): the keyword arguments that are the same for all tasks in
+                this group.
+            different_kwargs (dict[str, list[Any]]): the keyword arguments that are different for
+                each task in this group. The tasks will each take one element of the list for each
+                key.
 
         Yields:
             Generator[dict[str, Any], None, None]: the generator yielding the keyword arguments for
                 each task.
         """
 
-        for _ in range(number_of_tasks): yield function_kwargs
+        for i in range(number_of_tasks):
+            different = {k: v[i] for k, v in different_kwargs.items()}
+            yield {**same_kwargs, **different}
 
 
 class Results:
     """
-    todo update docstring
     To handle the adding and getting results from tasks.
-    put() method to add results and results() method to get the sorted results from the same set of
-    tasks. Hence, the results method is blocking until that set of results is complete while the
-    put method waits for a lock to add the result to a sorting queue.
+    'put' method to add results and 'give' method to get the sorted results from the same set of
+    tasks. Keep in mind that the 'give' method doesn't wait for the results to be ready and as
+    such you should first check the return of the 'full' method to ensure that the results are
+    ready.
     """
 
     def __init__(self) -> None:
@@ -460,6 +416,13 @@ class Results:
         Two threads will run:
             - one to add the results to the results queue.
             - one to check the results queue and add the results to the AllResults instance.
+        
+        The public methods are:
+            - 'put' method to add results 
+            - 'give' method to get the sorted results from the same set of tasks (doesn't wait for
+                the results to be ready).
+            - 'full' method to check if the results for a given task identifier are ready. Should
+                be used before calling the 'give' method to ensure that the results are ready. 
         """
 
         # LOCK n DATA
@@ -484,10 +447,10 @@ class Results:
         result = TaskResult(identifier=task_identifier, data=data)
         with self._lock: self._results_queue.append(result)
 
-    def give(self, identifier: TaskIdentifier) -> list[Any]:
+    def give(self, identifier: TaskIdentifier) -> list[tuple[int, Any]]:
         """
         To get the results the same group of tasks.
-        Keep in mind that you should first check results_full() to ensure that the results are
+        Keep in mind that you should first check the 'full' method to ensure that the results are
         ready.
 
         Args:
@@ -497,9 +460,9 @@ class Results:
             list[Any]: ordered data list of the results of a given group of tasks.
         """
 
-        # WAIT n GET results
+        # GET results
         same_results = self._all_results.get(identifier)
-        return [task.data for task in same_results.data]
+        return [(task.identifier.index, task.data) for task in same_results.data]
     
     def full(self, identifier: TaskIdentifier) -> bool:
         """
@@ -536,7 +499,7 @@ class Results:
         while True:
             result = self._pop_result()
             if result is not None: return result
-            time.sleep(0.5)  # todo add it as a parameter for the class
+            time.sleep(0.5)
             
     def _pop_result(self) -> TaskResult | None:
         """
@@ -554,9 +517,9 @@ class Results:
 # MANAGER creation
 class CustomManager(BaseManager):
     """
-    Custom manager that contains a stack (List), an integer (Integer), a results handler (Results),
-    and a lock (Lock). This manager is used to handle the multiprocessing tasks in the
-    ProcessCoordinator.
+    Custom manager that contains an integer (Integer), a queue index tracker (IndexTracker),
+    a stack (Stack), and a results handler (Results). This manager is used to handle the
+    multiprocessing tasks in the ProcessCoordinator using the ManagerAllocator class.
     To use it, don't forget to call the start() method.
     """
 
@@ -572,18 +535,7 @@ class CustomManager(BaseManager):
 
 
 # MANAGER registration
-CustomManager.register("Lock", Lock)
 CustomManager.register("Stack", Stack)
 CustomManager.register("Integer", Integer)
 CustomManager.register("Results", Results)
-CustomManager.register("StackTracker", StackTracker)
-
-
-
-# TESTING
-if __name__ == "__main__":
-
-    manager = CustomManager()
-    manager.start()
-    results = manager.Results()
-    manager.shutdown()
+CustomManager.register("IndexTracker", IndexTracker)

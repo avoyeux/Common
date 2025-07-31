@@ -13,7 +13,7 @@ from .custom_manager import CustomManager, TaskIdentifier
 from typing import Any, Callable, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     from .custom_manager.multiprocessing_manager import (
-        Results, Integer, Stack, CustomManagerProtocol, IndexTracker, TaskValue,
+        Results, Integer, Stack, CustomManagerProtocol, TaskValue, StackTracker, SorterTracker,
     )
     from .task_allocator import ProcessCoordinator
 
@@ -87,7 +87,7 @@ class IndexAllocator:
         Lets you compute the queue indexes and corresponding number of tasks for multiple managers.
 
         There are two main methods:
-            - 'add': to add the number of tasks to the index tracker.
+            - 'add': to add the number of tasks to the index trackers.
             - 'group_tasks': to compute the number of tasks for each queue based on the total
                 number of tasks and the number of queues.
 
@@ -99,17 +99,24 @@ class IndexAllocator:
 
         # ATTRIBUTEs
         self._manager_nb = manager_nb
-        self.stack: IndexTracker = manager.IndexTracker()
+        self.stack: StackTracker = manager.StackTracker()
+        self.sorter: SorterTracker = manager.SorterTracker()
 
-    def add(self, number_of_tasks: int) -> None:
+    def add(self, group_id: int, number_of_tasks: int) -> None:
         """
-        To add a group of tasks to the index tracker.
+        To add a group of tasks to the index trackers.
 
         Args:
+            group_id (int): the identifier of the group of tasks that were just added to the stack.
             number_of_tasks (int): the total number of tasks to add to the index tracker.
         """
 
         self.stack.add(number_of_tasks=number_of_tasks, number_of_queues=self._manager_nb[0])
+        self.sorter.add(
+            group_id=group_id,
+            total_tasks=number_of_tasks,
+            nb_of_queues=self._manager_nb[1],
+        )
 
     def group_tasks(self, number_of_tasks: int, nb_of_queues: int) -> list[int]:
         """
@@ -310,7 +317,7 @@ class ManagerAllocator:
             )
 
         # SETUP queue index trackers
-        self._index_tracker.add(number_of_tasks=number_of_tasks)
+        self._index_tracker.add(group_id=group_id, number_of_tasks=number_of_tasks)
 
         # COUNTs (needs to be put after the stack is updated)
         self._stack_count.plus(number_of_tasks)
@@ -354,8 +361,9 @@ class ManagerAllocator:
             number_of_tasks=identifier.total_tasks,
             nb_of_queues=self._manager_nb[1],
         )
+
         # INDEX
-        sorter_index = identifier.index % len(valid_values)
+        sorter_index = self._index_tracker.sorter.next(group_id=identifier.group_id)
         identifier.group_tasks = valid_values[sorter_index]  # update group tasks
 
         # SORTER add

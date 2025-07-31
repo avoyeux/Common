@@ -344,7 +344,7 @@ if __name__ == "__main__":
     from common import Decorators, ProcessCoordinator
     from typing import Any
 
-    @Decorators.running_time
+    @Decorators.running_time(flush=True)
     def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
         task_id = coordinator.submit_tasks(
             number_of_tasks=50,
@@ -369,7 +369,7 @@ if __name__ == "__main__":
         # print(f"Task {x} - {y} done", flush=True)
         return (x, y)
 
-    @Decorators.running_time
+    @Decorators.running_time(flush=True)
     def run():
         with ProcessCoordinator(workers=14, managers=(6, 5), verbose=3, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(

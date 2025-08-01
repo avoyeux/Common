@@ -28,18 +28,9 @@ class CustomManagerProtocol(Protocol):
     Protocol defining the interface of my CustomManager.
     """
 
-    def Integer(self) -> Integer:
-        """
-        Create an integer proxy that can be used to store and manipulate an integer value.
-        'plus' to add a value and 'minus' to subtract a value. Starting value is 0.
-        Lock implemented internally.
-        """
-        ...
-
     def Stack(self) -> Stack:
         """
         Proxy stack to store the tasks to submit and sends them to the workers when asked for it.
-        Lock implemented internally.
         """
         ...
 
@@ -47,7 +38,6 @@ class CustomManagerProtocol(Protocol):
         """
         To create a proxy index tracker to keep track of the next stack index to use for the next
         task.
-        Lock implemented internally.
         """
         ...
 
@@ -55,7 +45,6 @@ class CustomManagerProtocol(Protocol):
         """
         To create a proxy sorter tracker to keep track of the next sorter index to use for the next
         task.
-        Lock implemented internally.
         """
         ...
 
@@ -66,7 +55,7 @@ class CustomManagerProtocol(Protocol):
         of tasks. Keep in mind that the 'give' method doesn't wait for the results to be ready and
         as such you should first check the return of the 'full' method to ensure that the results
         are ready.
-        Lock implemented internally.
+        A lock is implemented internally.
         """
         ...
 
@@ -83,60 +72,6 @@ class CustomManagerProtocol(Protocol):
         ...
 
 
-class Integer:
-    """
-    A super simple class to have an integer value inside the custom manager.
-    Lock implemented internally.
-    """
-
-    def __init__(self) -> None:
-        """
-        Create an instance of 0.
-        The class uses a 'plus' and 'minus' method to change the value. Both methods return the
-        current value after the operation.
-
-        A lock is implemented internally.
-        """
-
-        # DATA
-        self._value = 0
-        self._lock = threading.Lock()
-
-    def plus(self, number: int = 1) -> int:
-        """
-        Increment the integer value by a given value.
-        
-        Args:
-            number (int, optional): the value to add to the integer. Defaults to 1
-
-        Returns:
-            int: the integer value after the operation.
-        """
-
-        self._lock.acquire()
-        self._value += number
-        value = self._value
-        self._lock.release()
-        return value
-    
-    def minus(self, number: int = 1) -> int:
-        """
-        Decrement the integer value by a given value.
-
-        Args:
-            number (int, optional): the value to subtract from the integer. Defaults to 1.
-
-        Returns:
-            int: the integer value after the operation.
-        """
-
-        self._lock.acquire()
-        self._value -= number
-        value = self._value
-        self._lock.release()
-        return value
-
-
 class StackTracker:
     """
     A class to keep track of the stack index to use for the next task group.
@@ -151,8 +86,7 @@ class StackTracker:
         It will ensure that you use the right queue index to submit the next task to.
         """
 
-        # LOCK n DATA
-        self._lock = threading.Lock()
+        # DATA
         self._list: list[tuple[
             Generator[int, None, None],
             Generator[bool | None, None, None]
@@ -166,7 +100,6 @@ class StackTracker:
             int: the next queue index to use.
         """
 
-        self._lock.acquire()
         while True:
             index_generator, length_generator = self._list[-1]
             exists = next(length_generator)
@@ -174,7 +107,6 @@ class StackTracker:
             if exists: break
             self._list.pop()  # remove finished generator
         value = next(index_generator)
-        self._lock.release()
         return value
 
     def add(self, number_of_tasks: int, number_of_queues: int) -> None:
@@ -186,12 +118,11 @@ class StackTracker:
             number_of_queues (int): the number of queues to create for the tasks.
         """
 
-        self._lock.acquire()
         self._list.append((
             self._index_generator(number_of_queues),
             self._length_checker(number_of_tasks)
         ))
-        self._lock.release()
+
 
     def _length_checker(self, group_tasks: int) -> Generator[bool | None, None, None]:
         """
@@ -232,7 +163,6 @@ class SorterTracker:
     The public methods are:
         - 'add' to add a new group of tasks to the sorter tracker.
         - 'next' to get the index of the sorter to use given a task group ID.
-    This class has an internal lock implemented.
     """
 
     def __init__(self) -> None:
@@ -244,11 +174,9 @@ class SorterTracker:
             - 'add' to add a new group of tasks to the sorter tracker.
             - 'next' to get the index of the sorter to use given a task group ID.
         
-        A lock is implemented internally.
         """
 
-        # LOCK n DATA        
-        self._lock = threading.Lock()
+        # DATA        
         self._dict: dict[
             int,
             tuple[
@@ -267,12 +195,10 @@ class SorterTracker:
             nb_of_queues (int): the number of queues to create for the tasks.
         """
 
-        self._lock.acquire()
         self._dict[group_id] = (
             self._length_generator(total_tasks=total_tasks),
             self._sorter_index_generator(nb_of_queues=nb_of_queues),
         )
-        self._lock.release()
 
     def next(self, group_id: int) -> int:
         """
@@ -285,12 +211,10 @@ class SorterTracker:
             int: the index of the sorter to use.
         """
 
-        self._lock.acquire()
         check, stack_index = self._dict[group_id]
         index = next(stack_index)
         last = next(check)
         if last: self._dict.pop(group_id)  # remove finished sorter
-        self._lock.release()
         return index
 
     def _sorter_index_generator(self, nb_of_queues: int) -> Generator[int, None, None]:
@@ -354,9 +278,6 @@ class Stack:
             ]
         ] = []
 
-        # LOCK
-        self._lock = threading.Lock()
-
     def put(
             self,
             group_id: int,
@@ -404,7 +325,6 @@ class Stack:
         )
         
         # ADD tasks to waiting list
-        self._lock.acquire()
         self._list.append((
             index_generator,
             nb_of_tasks,
@@ -415,7 +335,6 @@ class Stack:
             coordinator,
             results,
         ))
-        self._lock.release()
 
     def get(self) -> TaskValue:
         """
@@ -428,7 +347,6 @@ class Stack:
             TaskValue: the corresponding task to be run by the workers.
         """
 
-        self._lock.acquire()
         while True:
             (
                 index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
@@ -444,7 +362,6 @@ class Stack:
         
         # GET kwargs
         kwargs = next(kwargs_generator)
-        self._lock.release()
 
         # FORMAT FetchInfo
         fetch_info = FetchInfo(
@@ -641,7 +558,6 @@ class CustomManager(BaseManager):
 
 # MANAGER registration
 CustomManager.register("Stack", Stack)
-CustomManager.register("Integer", Integer)
 CustomManager.register("Results", Results)
 CustomManager.register("StackTracker", StackTracker)
 CustomManager.register("SorterTracker", SorterTracker)

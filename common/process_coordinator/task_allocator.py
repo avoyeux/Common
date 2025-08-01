@@ -17,7 +17,10 @@ from .manager_allocator import ManagerAllocator
 
 # TYPE ANNOTATIONs
 from typing import Any, Self, Callable, overload, Literal, TYPE_CHECKING
-if TYPE_CHECKING: from .custom_manager import TaskIdentifier
+if TYPE_CHECKING:
+    import ctypes
+    from .custom_manager import TaskIdentifier
+    from multiprocessing.sharedctypes import Synchronized
 
 # API public
 all = ['ProcessCoordinator']
@@ -30,6 +33,7 @@ all = ['ProcessCoordinator']
 
 class ProcessCoordinator:
     """
+    todo update docstring
     Creates a set number of processes once and uses them to run tasks.
     Nested multiprocessing is supported by passing the coordinator instance to the workers.
     Keep in mind that the target function will need a 'coordinator' if wanting to use nested
@@ -38,7 +42,7 @@ class ProcessCoordinator:
 
     def __init__(
             self,
-            workers: int,
+            workers: int = 2,
             managers: int | tuple[int, int] = 1,
             verbose: int = 1,
             flush: bool = False,
@@ -51,7 +55,7 @@ class ProcessCoordinator:
         multiprocessing.
         
         Args:
-            total_processes (int): the max number of processes to create.
+            workers (int): the max number of processes to create. Defaults to 2.
             managers (int | tuple[int, int], optional): the number of managers to create.
                 If a single integer is passed, then it will create that many managers with
                 one input stack and one results stack. If a tuple is passed, then it will create
@@ -276,7 +280,7 @@ class ProcessCoordinator:
             if check: fetch = manager.get() # input ready
 
             # COUNT tasks
-            manager._stack_count.plus()  # * changing it back (like a lock.release())
+            with manager._count.stacks.get_lock(): manager._count.stacks.value += 1  # * ~ .release()
 
             if check is None: 
                 print(f"\033[1;31mExiting a worker\033[0m", flush=manager._flush)
@@ -311,7 +315,7 @@ class ProcessCoordinator:
         if check: fetch = self._manager.get()  # input ready
 
         # COUNT tasks
-        self._manager._stack_count.plus() # * changing it back (like a lock.release())
+        with self._manager._count.stacks.get_lock(): self._manager._count.stacks.value += 1
 
         if check is None:
             print(
@@ -371,7 +375,7 @@ if __name__ == "__main__":
 
     @Decorators.running_time(flush=True)
     def run():
-        with ProcessCoordinator(workers=14, managers=(6, 5), verbose=3, flush=True) as coordinator:
+        with ProcessCoordinator(workers=14, managers=(4, 4), verbose=3, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(
                 number_of_tasks=20,
                 function=main_worker,

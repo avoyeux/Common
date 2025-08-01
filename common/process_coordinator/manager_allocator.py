@@ -6,19 +6,25 @@ not doing anything while waiting for the manager to serialize the data.
 """
 from __future__ import annotations
 
+# IMPORTs alias
+import multiprocessing as mp
+
 # IMPORTs local
 from .custom_manager import CustomManager, TaskIdentifier
 
 # TYPE ANNOTATIONs
 from typing import Any, Callable, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
-    from .custom_manager.multiprocessing_manager import (
-        Results, Integer, Stack, CustomManagerProtocol, TaskValue, StackTracker, SorterTracker,
-    )
     from .task_allocator import ProcessCoordinator
+    from multiprocessing.sharedctypes import Synchronized
+    from .custom_manager.multiprocessing_manager import (
+        Results, Stack, CustomManagerProtocol, TaskValue, StackTracker, SorterTracker,
+    )
 
 # API public
 __all__ = ['ManagerAllocator']
+
+# ! code doesn't work with only one manager.
 
 
 
@@ -81,7 +87,11 @@ class IndexAllocator:
             of tasks and the number of queues.
     """
 
-    def __init__(self, manager: CustomManagerProtocol, manager_nb: tuple[int, int]) -> None:
+    def __init__(
+            self,
+            managers: tuple[CustomManagerProtocol, CustomManagerProtocol],
+            manager_nb: tuple[int, int],
+        ) -> None:
         """
         To create an index allocator for the given manager and number of managers.
         Lets you compute the queue indexes and corresponding number of tasks for multiple managers.
@@ -92,15 +102,15 @@ class IndexAllocator:
                 number of tasks and the number of queues.
 
         Args:
-            manager (CustomManagerProtocol): the manager used to create and share the index
-                tracker.
+            managers (tuple[CustomManagerProtocol, CustomManagerProtocol]): the managers used to
+                create and share the index trackers.
             manager_nb (tuple[int, int]): the number of managers used in the ManagerAllocator.
         """
 
         # ATTRIBUTEs
         self._manager_nb = manager_nb
-        self.stack: StackTracker = manager.StackTracker()
-        self.sorter: SorterTracker = manager.SorterTracker()
+        self.stack: StackTracker = managers[0].StackTracker()
+        self.sorter: SorterTracker = managers[1].SorterTracker()
 
     def add(self, group_id: int, number_of_tasks: int) -> None:
         """
@@ -149,6 +159,31 @@ class IndexAllocator:
 
         coef, res = divmod(total, n)
         return [coef + 1] * res + [coef] * (n - res)
+
+
+class CounterSingleton:
+    """
+    A singleton class to get the group id and count the stack and sorter calls.
+    Created as a singleton to ensure that these values are not pickled (as the shouldn't be).
+    """
+
+    _instance: CounterSingleton | None = None  # * singleton instance
+
+    def __new__(cls, *args, **kwargs) -> CounterSingleton:
+        """
+        Calling the instance creator so that the class can be used as a singleton.
+
+        Returns:
+            CounterSingleton: the singleton instance of the class.
+        """
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+            # SHARED numbers
+            cls.group_id: Synchronized[int] = mp.Value('L', 0)
+            cls.stacks: Synchronized[int] = mp.Value('l', 0)
+            cls.sorters: Synchronized[int] = mp.Value('L', 0)
+        return cls._instance
 
 
 class ManagerAllocator:
@@ -203,14 +238,12 @@ class ManagerAllocator:
         self._sorters: list[StartedSorter] = [StartedSorter() for _ in range(self._manager_nb[1])]
         if not self._stacks: self._stacks = [self._sorters[0]]
         self._index_tracker: IndexAllocator = IndexAllocator(
-            manager=self._stacks[0].manager,
+            managers=(self._stacks[0].manager, self._stacks[-1].manager),
             manager_nb=self._manager_nb,
         )
 
-        # SHARED numbers
-        self._unique_id: Integer = self._sorters[0].manager.Integer()
-        self._stack_count: Integer = self._sorters[0].manager.Integer()
-        self._sorter_count: Integer = self._sorters[0].manager.Integer()
+        # COUNTs
+        self._count = CounterSingleton()
 
         # ATTRIBUTEs settings
         self._verbose = verbose
@@ -290,7 +323,12 @@ class ManagerAllocator:
         """
 
         # IDENTIFIER
-        group_id = self._unique_id.plus() # different int for each task group
+        with self._count.group_id.get_lock():
+            group_id = self._count.group_id.value
+            self._count.group_id.value += 1  # increment unique id for the next task group
+
+        # SETUP queue index trackers
+        self._index_tracker.add(group_id=group_id, number_of_tasks=number_of_tasks)
 
         # INDEXes
         valid_values = self._index_tracker.group_tasks(
@@ -316,12 +354,9 @@ class ManagerAllocator:
                 results=results,
             )
 
-        # SETUP queue index trackers
-        self._index_tracker.add(group_id=group_id, number_of_tasks=number_of_tasks)
-
         # COUNTs (needs to be put after the stack is updated)
-        self._stack_count.plus(number_of_tasks)
-        self._sorter_count.plus()
+        with self._count.stacks.get_lock(): self._count.stacks.value += number_of_tasks
+        with self._count.sorters.get_lock(): self._count.sorters.value += 1
 
         # IDENTIFIER to return group results
         identifier = TaskIdentifier(
@@ -341,7 +376,7 @@ class ManagerAllocator:
         """
 
         # COUNT
-        self._stack_count.minus()
+        with self._count.stacks.get_lock(): self._count.stacks.value -= 1
         
         # STACK choose
         stack_index = self._index_tracker.stack.next()
@@ -383,7 +418,7 @@ class ManagerAllocator:
         """
 
         # COUNT
-        self._sorter_count.minus()
+        with self._count.sorters.get_lock(): self._count.sorters.value -= 1
 
         # SORTER choose
         valid_values = self._index_tracker.group_tasks(
@@ -408,9 +443,12 @@ class ManagerAllocator:
                 (False). Returns None when no tasks or results in waiting (i.e. workers need to be
                 stopped).
         """
-
-        stack_check = (self._stack_count.minus() <= -1)  # * to act as a lock
-        sorter_check = (self._sorter_count.plus(0) == 0)
+        with self._count.stacks.get_lock():
+            self._count.stacks.value -= 1  # * acts as a lock
+            stack_value = self._count.stacks.value
+        with self._count.sorters.get_lock(): sorter_value = self._count.sorters.value
+        stack_check = (stack_value <= -1)
+        sorter_check = (sorter_value == 0)
         if stack_check:
             if sorter_check:
                 if self._verbose > 0:

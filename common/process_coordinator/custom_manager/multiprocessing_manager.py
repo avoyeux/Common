@@ -34,20 +34,6 @@ class CustomManagerProtocol(Protocol):
         """
         ...
 
-    def StackTracker(self) -> StackTracker:
-        """
-        To create a proxy index tracker to keep track of the next stack index to use for the next
-        task.
-        """
-        ...
-
-    def SorterTracker(self) -> SorterTracker:
-        """
-        To create a proxy sorter tracker to keep track of the next sorter index to use for the next
-        task.
-        """
-        ...
-
     def Results(self) -> Results:
         """
         Proxy to handle the adding and getting results from tasks.
@@ -123,7 +109,6 @@ class StackTracker:
             self._length_checker(number_of_tasks)
         ))
 
-
     def _length_checker(self, group_tasks: int) -> Generator[bool | None, None, None]:
         """
         Creates a generator to stop when all group tasks have been called.
@@ -155,97 +140,6 @@ class StackTracker:
 
         while True:
             for i in range(nb_of_queues): yield i
-
-
-class SorterTracker:
-    """
-    A class to keep track of the next sorter index to use for the next task.
-    The public methods are:
-        - 'add' to add a new group of tasks to the sorter tracker.
-        - 'next' to get the index of the sorter to use given a task group ID.
-    """
-
-    def __init__(self) -> None:
-        """
-        Initialize an empty dictionary to store the sorter index generators and their length
-        generators.
-
-        The public methods are:
-            - 'add' to add a new group of tasks to the sorter tracker.
-            - 'next' to get the index of the sorter to use given a task group ID.
-        
-        """
-
-        # DATA        
-        self._dict: dict[
-            int,
-            tuple[
-                Generator[bool, None, None],
-                Generator[int, None, None],
-            ],
-        ] = {}  # for the sorter(s)
-
-    def add(self, group_id: int, total_tasks: int, nb_of_queues: int) -> None:
-        """
-        To add a new group of tasks to the sorter tracker.
-
-        Args:
-            group_id (int): the ID of the group of tasks.
-            total_tasks (int): the total number of tasks in the group.
-            nb_of_queues (int): the number of queues to create for the tasks.
-        """
-
-        self._dict[group_id] = (
-            self._length_generator(total_tasks=total_tasks),
-            self._sorter_index_generator(nb_of_queues=nb_of_queues),
-        )
-
-    def next(self, group_id: int) -> int:
-        """
-        To get the index of the sorter to use given a task group ID.
-
-        Args:
-            group_id (int): the ID of the group of tasks.
-
-        Returns:
-            int: the index of the sorter to use.
-        """
-
-        check, stack_index = self._dict[group_id]
-        index = next(stack_index)
-        last = next(check)
-        if last: self._dict.pop(group_id)  # remove finished sorter
-        return index
-
-    def _sorter_index_generator(self, nb_of_queues: int) -> Generator[int, None, None]:
-        """
-        Creates a generator that yields the index of the sorter to use.
-
-        Args:
-            nb_of_queues (int): the number of queues to create indices for.
-
-        Yields:
-            Generator[int, None, None]: yields the index of the sorter to use.
-        """
-
-        while True:
-            for i in range(nb_of_queues): yield i
-
-    def _length_generator(self, total_tasks: int) -> Generator[bool, None, None]:
-        """
-        Creates a generator that yields False the number of times there are tasks and then yields
-        True to tell the user to stop.
-
-        Args:
-            total_tasks (int): the total number of tasks in the group.
-
-        Yields:
-            Generator[bool, None, None]: yields False the number of times there are tasks and then
-                yields True to tell the user to stop.
-        """
-
-        for _ in range(total_tasks - 1): yield False
-        yield True  # last one
 
 
 class Stack:
@@ -559,5 +453,3 @@ class CustomManager(BaseManager):
 # MANAGER registration
 CustomManager.register("Stack", Stack)
 CustomManager.register("Results", Results)
-CustomManager.register("StackTracker", StackTracker)
-CustomManager.register("SorterTracker", SorterTracker)

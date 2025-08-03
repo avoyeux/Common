@@ -5,6 +5,8 @@
 !/common/
 !/common/**/*
 !/tests/
+!/rustmod/
+!/rustmod/src/
 
 # BLACKLIST 
 **/.*/
@@ -14,6 +16,8 @@
 !**/*.py
 !**/*.pyi
 !**/*.sh
+!**/*.rs
+!**/*.toml
 
 # WHITELIST files
 !README.md

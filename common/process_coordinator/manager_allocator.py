@@ -6,20 +6,15 @@ not doing anything while waiting for the manager to serialize the data.
 """
 from __future__ import annotations
 
-# IMPORTs alias
-import multiprocessing as mp
-
 # IMPORTs local
 from .custom_manager import CustomManager, TaskIdentifier
 
 # TYPE ANNOTATIONs
 from typing import Any, Callable, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
+    from .shared_count import Counter
     from .task_allocator import ProcessCoordinator
-    from multiprocessing.sharedctypes import Synchronized
-    from .custom_manager.multiprocessing_manager import (
-        Results, Stack, CustomManagerProtocol, TaskValue, StackTracker, SorterTracker,
-    )
+    from .custom_manager.multiprocessing_manager import Results, Stack, TaskValue
 
 # API public
 __all__ = ['ManagerAllocator']
@@ -79,72 +74,33 @@ class StartedSorter:
 
 class IndexAllocator:
     """
-    Computes queue indexes and corresponding number of tasks for multiple managers.
+    Computes the number of tasks needed for each queue.
 
-    There are two main methods:
-        - 'add': to add the number of tasks to the index tracker.
-        - 'group_tasks': to compute the number of tasks for each queue based on the total number
-            of tasks and the number of queues.
+    There is one public (staticmethod) function:
+        - 'valid_indexes': to get the number of tasks per queue. If no tasks for a certain queue,
+            then the corresponding item doesn't exist.
     """
 
-    def __init__(
-            self,
-            managers: tuple[CustomManagerProtocol, CustomManagerProtocol],
-            manager_nb: tuple[int, int],
-        ) -> None:
+    @staticmethod
+    def valid_indexes(number_of_tasks: int, nb_of_queues: int) -> list[int]:
         """
-        To create an index allocator for the given manager and number of managers.
-        Lets you compute the queue indexes and corresponding number of tasks for multiple managers.
-
-        There are two main methods:
-            - 'add': to add the number of tasks to the index trackers.
-            - 'group_tasks': to compute the number of tasks for each queue based on the total
-                number of tasks and the number of queues.
+        To get the number of tasks per queue. If there is not enough tasks to fill all the queues,
+        then the last queue indexes are empty, hence the len(list[int]) return will be smaller
+        than the number of queues.
 
         Args:
-            managers (tuple[CustomManagerProtocol, CustomManagerProtocol]): the managers used to
-                create and share the index trackers.
-            manager_nb (tuple[int, int]): the number of managers used in the ManagerAllocator.
-        """
-
-        # ATTRIBUTEs
-        self._manager_nb = manager_nb
-        self.stack: StackTracker = managers[0].StackTracker()
-        self.sorter: SorterTracker = managers[1].SorterTracker()
-
-    def add(self, group_id: int, number_of_tasks: int) -> None:
-        """
-        To add a group of tasks to the index trackers.
-
-        Args:
-            group_id (int): the identifier of the group of tasks that were just added to the stack.
-            number_of_tasks (int): the total number of tasks to add to the index tracker.
-        """
-
-        self.stack.add(number_of_tasks=number_of_tasks, number_of_queues=self._manager_nb[0])
-        self.sorter.add(
-            group_id=group_id,
-            total_tasks=number_of_tasks,
-            nb_of_queues=self._manager_nb[1],
-        )
-
-    def group_tasks(self, number_of_tasks: int, nb_of_queues: int) -> list[int]:
-        """
-        To compute the number of tasks for each queue based on the total number of tasks and the
-        number of queues.
-
-        Args:
-            number_of_tasks (int): the total number of tasks needed to be distributed.
+            number_of_tasks (int): the total number of tasks for the same group of tasks.
             nb_of_queues (int): the number of queues to distribute the tasks across.
 
         Returns:
             list[int]: list of the number of tasks for each queue.
         """
 
-        index_partition = self._partition_integer(total=number_of_tasks, n=nb_of_queues)
+        index_partition = IndexAllocator._partition_integer(total=number_of_tasks, n=nb_of_queues)
         return [n for n in index_partition if n > 0]
 
-    def _partition_integer(self, total: int, n: int) -> list[int]:
+    @staticmethod
+    def _partition_integer(total: int, n: int) -> list[int]:
         """
         Partition an integer into n parts as evenly as possible.
         This is done so that each submit partitions the tasks evenly across the managed stacks.
@@ -159,31 +115,6 @@ class IndexAllocator:
 
         coef, res = divmod(total, n)
         return [coef + 1] * res + [coef] * (n - res)
-
-
-class CounterSingleton:
-    """
-    A singleton class to get the group id and count the stack and sorter calls.
-    Created as a singleton to ensure that these values are not pickled (as the shouldn't be).
-    """
-
-    _instance: CounterSingleton | None = None  # * singleton instance
-
-    def __new__(cls, *args, **kwargs) -> CounterSingleton:
-        """
-        Calling the instance creator so that the class can be used as a singleton.
-
-        Returns:
-            CounterSingleton: the singleton instance of the class.
-        """
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-
-            # SHARED numbers
-            cls.group_id: Synchronized[int] = mp.Value('L', 0)
-            cls.stacks: Synchronized[int] = mp.Value('l', 0)
-            cls.sorters: Synchronized[int] = mp.Value('L', 0)
-        return cls._instance
 
 
 class ManagerAllocator:
@@ -231,19 +162,12 @@ class ManagerAllocator:
         """
 
         # MANAGER arrangement
-        self._manager_nb = self._manager_numbers(managers)
+        self.manager_nb = self._manager_numbers(managers)
 
         # SHARED stack(s) and sorter(s)
-        self._stacks: list[StartedStack] = [StartedStack() for _ in range(self._manager_nb[0])]
-        self._sorters: list[StartedSorter] = [StartedSorter() for _ in range(self._manager_nb[1])]
+        self._stacks: list[StartedStack] = [StartedStack() for _ in range(self.manager_nb[0])]
+        self._sorters: list[StartedSorter] = [StartedSorter() for _ in range(self.manager_nb[1])]
         if not self._stacks: self._stacks = [self._sorters[0]]
-        self._index_tracker: IndexAllocator = IndexAllocator(
-            managers=(self._stacks[0].manager, self._stacks[-1].manager),
-            manager_nb=self._manager_nb,
-        )
-
-        # COUNTs
-        self._count = CounterSingleton()
 
         # ATTRIBUTEs settings
         self._verbose = verbose
@@ -256,6 +180,7 @@ class ManagerAllocator:
     @overload
     def submit(
             self,
+            count: Counter,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: Literal[True],
@@ -267,6 +192,7 @@ class ManagerAllocator:
     @overload
     def submit(
             self,
+            count: Counter,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: Literal[False],
@@ -279,6 +205,7 @@ class ManagerAllocator:
     @overload
     def submit(
             self,
+            count: Counter,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: bool = ...,
@@ -289,6 +216,7 @@ class ManagerAllocator:
 
     def submit(
             self,
+            count: Counter,
             number_of_tasks: int,
             function: Callable[..., Any],
             results: bool = True,
@@ -297,6 +225,7 @@ class ManagerAllocator:
             coordinator: ProcessCoordinator | None = None,
         ) -> TaskIdentifier | None:
         """
+        todo update docstring
         Submits a group of tasks to the input stack(s).
         If you are planning to also submit tasks inside this call, then you should pass the
         'ProcessCoordinator' instance to the function. Make sure that 'function' has a
@@ -323,17 +252,16 @@ class ManagerAllocator:
         """
 
         # IDENTIFIER
-        with self._count.group_id.get_lock():
-            group_id = self._count.group_id.value
-            self._count.group_id.value += 1  # increment unique id for the next task group
+        group_id = count.group_id.plus()
 
         # SETUP queue index trackers
-        self._index_tracker.add(group_id=group_id, number_of_tasks=number_of_tasks)
+        count.dict.set(key=group_id, total_tasks=number_of_tasks)
+        count.list.add(total_tasks=number_of_tasks)
 
         # INDEXes
-        valid_values = self._index_tracker.group_tasks(
+        valid_values = IndexAllocator.valid_indexes(
             number_of_tasks=number_of_tasks,
-            nb_of_queues=self._manager_nb[0],
+            nb_of_queues=self.manager_nb[0],
         )
 
         # SEND to stack(s)
@@ -355,8 +283,8 @@ class ManagerAllocator:
             )
 
         # COUNTs (needs to be put after the stack is updated)
-        with self._count.stacks.get_lock(): self._count.stacks.value += number_of_tasks
-        with self._count.sorters.get_lock(): self._count.sorters.value += 1
+        count.stacks.plus(number_of_tasks)
+        count.sorters.plus()
 
         # IDENTIFIER to return group results
         identifier = TaskIdentifier(
@@ -367,8 +295,9 @@ class ManagerAllocator:
         ) if results else None
         return identifier
 
-    def get(self) -> TaskValue:
+    def get(self, count: Counter) -> TaskValue:
         """
+        todo update docstring
         To get a task from an input stack(s).
 
         Returns:
@@ -376,14 +305,15 @@ class ManagerAllocator:
         """
 
         # COUNT
-        with self._count.stacks.get_lock(): self._count.stacks.value -= 1
+        count.stacks.minus()
         
         # STACK choose
-        stack_index = self._index_tracker.stack.next()
+        stack_index = count.list.next()
         return self._stacks[stack_index].stack.get()
 
-    def sort(self, identifier: TaskIdentifier, data: Any) -> None:
+    def sort(self, count: Counter,identifier: TaskIdentifier, data: Any) -> None:
         """
+        todo update docstring
         To send a result to one of the sorter managers.
 
         Args:
@@ -392,20 +322,21 @@ class ManagerAllocator:
         """
 
         # GROUP TASKS depends on nb of queues
-        valid_values = self._index_tracker.group_tasks(
+        valid_values = IndexAllocator.valid_indexes(
             number_of_tasks=identifier.total_tasks,
-            nb_of_queues=self._manager_nb[1],
+            nb_of_queues=self.manager_nb[1],
         )
 
         # INDEX
-        sorter_index = self._index_tracker.sorter.next(group_id=identifier.group_id)
+        sorter_index = count.dict.get(key=identifier.group_id)
         identifier.group_tasks = valid_values[sorter_index]  # update group tasks
 
         # SORTER add
         self._sorters[sorter_index].results.put(task_identifier=identifier, data=data)
 
-    def give(self, identifier: TaskIdentifier) -> list[Any]:
+    def give(self, count: Counter, identifier: TaskIdentifier) -> list[Any]:
         """
+        todo update docstring
         To give back the results of a given task group.
         Keep in mind that before calling this method, the 'full' method should be returning
         True.
@@ -418,12 +349,12 @@ class ManagerAllocator:
         """
 
         # COUNT
-        with self._count.sorters.get_lock(): self._count.sorters.value -= 1
+        count.sorters.minus()
 
         # SORTER choose
-        valid_values = self._index_tracker.group_tasks(
+        valid_values = IndexAllocator.valid_indexes(
             number_of_tasks=identifier.total_tasks,
-            nb_of_queues=self._manager_nb[1],
+            nb_of_queues=self.manager_nb[1],
         )
 
         # GET results
@@ -433,8 +364,9 @@ class ManagerAllocator:
         give_sorted = sorted(give, key=lambda x: x[0])  # sort by index
         return [data for _, data in give_sorted]
     
-    def check(self) -> bool | None:
+    def check(self, count: Counter) -> bool | None:
         """
+        todo update docstring
         To check if there are tasks in the input stack(s) and if there are results in waiting.
         Hence, it is done to check if the worker process should continue processing tasks or not.
 
@@ -443,10 +375,8 @@ class ManagerAllocator:
                 (False). Returns None when no tasks or results in waiting (i.e. workers need to be
                 stopped).
         """
-        with self._count.stacks.get_lock():
-            self._count.stacks.value -= 1  # * acts as a lock
-            stack_value = self._count.stacks.value
-        with self._count.sorters.get_lock(): sorter_value = self._count.sorters.value
+        stack_value = count.stacks.minus()  # * acts as a lock
+        sorter_value = count.sorters.minus(0)
         stack_check = (stack_value <= -1)
         sorter_check = (sorter_value == 0)
         if stack_check:
@@ -469,9 +399,9 @@ class ManagerAllocator:
         """
 
         # SORTER choose
-        valid_values = self._index_tracker.group_tasks(
+        valid_values = IndexAllocator.valid_indexes(
             number_of_tasks=identifier.total_tasks,
-            nb_of_queues=self._manager_nb[1],
+            nb_of_queues=self.manager_nb[1],
         )
 
         # CHECK results ready
@@ -481,11 +411,17 @@ class ManagerAllocator:
         ])
         return full
 
-    def shutdown(self) -> None: 
+    def shutdown(self, count: Counter) -> None: 
         """
+        todo update docstring
         To shutdown the manager(s).
         """
 
+        # SHARED MEMORY
+        count.close()
+        count.unlink()
+
+        # MANAGERs
         for stack in self._stacks: stack.manager.shutdown()
         for sorter in self._sorters: sorter.manager.shutdown()
 

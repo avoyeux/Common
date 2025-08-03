@@ -1,0 +1,12 @@
+[package]
+name = "rustmod"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rustmod"  # This must match the name in #[pymodule]
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.25.1", features = ["extension-module", "macros"] }

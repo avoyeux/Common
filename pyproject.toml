@@ -1,0 +1,53 @@
+[build-system]
+requires = ["maturin==1.9.2", "setuptools>=61.0", "wheel"]
+build-backend = "maturin"
+
+[project]
+name = "common"
+version = "1.0.0"
+authors = [
+  { name = "Voyeux Alfred", email = "alfredvoyeux@hotmail.com" }
+]
+description = "Some functions that I use a lot."
+#readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+
+# Copy your requirements.txt here
+dependencies = [
+    "astropy==7.0.0",
+    "astropy-iers-data==0.2025.1.6.0.33.42",
+    "contourpy==1.3.2",
+    "cycler==0.12.1",
+    "fonttools==4.59.0",
+    "h5py==3.12.1",
+    "kiwisolver==1.4.8",
+    "matplotlib==3.10.3",
+    "numpy==2.2.1",
+    "packaging==24.2",
+    "pandas==2.2.3",
+    "pillow==11.1.0",
+    "pyerfa==2.0.1.5",
+    "pyparsing==3.2.3",
+    "python-dateutil==2.9.0.post0",
+    "pytz==2024.2",
+    "PyYAML==6.0.2",
+    "scipy==1.16.0",
+    "six==1.17.0",
+    "typeguard==4.4.1",
+    "typing_extensions==4.12.2",
+    "tzdata==2024.2",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests", "tests.*"]
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "rustmod"
+cargo-manifest = "rustmod/Cargo.toml"
+
+[tool.pyright]
+stubPath = "stubs/"
+include = ["."]

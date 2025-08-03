@@ -12,15 +12,12 @@ import time
 import multiprocessing as mp
 
 # IMPORTs local
+from .shared_count import Counter
 from .manager_allocator import ManagerAllocator
-
 
 # TYPE ANNOTATIONs
 from typing import Any, Self, Callable, overload, Literal, TYPE_CHECKING
-if TYPE_CHECKING:
-    import ctypes
-    from .custom_manager import TaskIdentifier
-    from multiprocessing.sharedctypes import Synchronized
+if TYPE_CHECKING: from .custom_manager import TaskIdentifier
 
 # API public
 all = ['ProcessCoordinator']
@@ -76,6 +73,9 @@ class ProcessCoordinator:
         manager = ManagerAllocator(managers=managers, verbose=self._verbose - 1, flush=self._flush)
         self._manager = manager
 
+        # SHARED counts
+        self.count = Counter(managers_nb=manager.manager_nb, length=1024)
+
         # CREATE processes
         self._processes: list[mp.Process] | None = self._create_processes()
 
@@ -125,7 +125,7 @@ class ProcessCoordinator:
         for p in self._processes: p.join()  # * cannot actually be None here.
 
         # CLOSE manager
-        self._manager.shutdown()
+        self._manager.shutdown(self.count)
 
     def exit(self) -> None:
         """
@@ -204,6 +204,7 @@ class ProcessCoordinator:
 
         # SEND to manager
         identifier = self._manager.submit(
+            count=self.count,
             number_of_tasks=number_of_tasks,
             function=function,
             results=results,
@@ -251,7 +252,7 @@ class ProcessCoordinator:
         """
 
         # PROCESS kwargs
-        kwargs = {'manager': self._manager}
+        kwargs = {'manager': self._manager, 'count': self.count}
 
         # CREATE processes
         processes = [
@@ -261,8 +262,9 @@ class ProcessCoordinator:
         return processes
 
     @staticmethod
-    def _worker_process(manager: ManagerAllocator) -> None:
+    def _worker_process(manager: ManagerAllocator, count: Counter) -> None:
         """
+        todo update docstring
         To run the worker process that will fetch the tasks from the input stack and put the
         results into the results stack.
 
@@ -276,20 +278,22 @@ class ProcessCoordinator:
 
         while True:
             # CHECK input
-            check = manager.check()
-            if check: fetch = manager.get() # input ready
+            check = manager.check(count)
+            if check: fetch = manager.get(count) # input ready
 
             # COUNT tasks
-            with manager._count.stacks.get_lock(): manager._count.stacks.value += 1  # * ~ .release()
+            count.stacks.plus()  # * acts as a lock.release()
 
             if check is None: 
                 print(f"\033[1;31mExiting a worker\033[0m", flush=manager._flush)
-                return  # all tasks done
+                break  # all tasks done
             if not check: time.sleep(1); continue # wait for more tasks
 
             # FETCH task
             fetch, coordinator, result = fetch
-            if coordinator is not None: fetch.kwargs['coordinator'] = coordinator
+            if coordinator is not None: 
+                coordinator.count = count
+                fetch.kwargs['coordinator'] = coordinator
 
             # PROCESS run
             output = ''  # for results to never be undefined
@@ -299,7 +303,8 @@ class ProcessCoordinator:
                 output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
             finally:
                 # PROCESS output
-                if result: manager.sort(identifier=fetch.identifier, data=output)
+                if result: manager.sort(count=count, identifier=fetch.identifier, data=output)
+        count.close()
 
     def _single_worker_process(self) -> bool:
         """
@@ -311,11 +316,11 @@ class ProcessCoordinator:
         """
 
         # CHECK input
-        check = self._manager.check()
-        if check: fetch = self._manager.get()  # input ready
+        check = self._manager.check(self.count)
+        if check: fetch = self._manager.get(self.count)  # input ready
 
         # COUNT tasks
-        with self._manager._count.stacks.get_lock(): self._manager._count.stacks.value += 1
+        self.count.stacks.plus()  # * ~ .release()
 
         if check is None:
             print(
@@ -329,7 +334,9 @@ class ProcessCoordinator:
 
         # FETCH task
         fetch, coordinator, result = fetch
-        if coordinator is not None: fetch.kwargs['coordinator'] = coordinator
+        if coordinator is not None:
+            coordinator.count = self.count
+            fetch.kwargs['coordinator'] = coordinator
 
         # PROCESS run
         output = ''  # for results to never be undefined
@@ -339,7 +346,8 @@ class ProcessCoordinator:
             output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
         finally:
             # PROCESS output
-            if result: self._manager.sort(identifier=fetch.identifier, data=output)
+            if result:
+                self._manager.sort(count=self.count, identifier=fetch.identifier, data=output)
             return False
 
 
@@ -351,10 +359,10 @@ if __name__ == "__main__":
     @Decorators.running_time(flush=True)
     def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
         task_id = coordinator.submit_tasks(
-            number_of_tasks=50,
+            number_of_tasks=5,
             function=task_function,
             same_kwargs={"x": x},
-            different_kwargs={"y": [i for i in range(50)]},
+            different_kwargs={"y": [i for i in range(5)]},
             results=True,
         )
         
@@ -375,11 +383,11 @@ if __name__ == "__main__":
 
     @Decorators.running_time(flush=True)
     def run():
-        with ProcessCoordinator(workers=14, managers=(4, 4), verbose=3, flush=True) as coordinator:
+        with ProcessCoordinator(workers=4, managers=(2, 2), verbose=3, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(
-                number_of_tasks=20,
+                number_of_tasks=5,
                 function=main_worker,
-                different_kwargs={"x": [i for i in range(20)]},
+                different_kwargs={"x": [i for i in range(5)]},
                 coordinator=coordinator,
             )
             

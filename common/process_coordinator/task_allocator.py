@@ -70,11 +70,15 @@ class ProcessCoordinator:
         self._flush = flush
 
         # SETUP manager
-        manager = ManagerAllocator(managers=managers, verbose=self._verbose - 1, flush=self._flush)
+        manager_nb = self._manager_numbers(managers)
+        self.count = Counter(managers_nb=manager_nb, length=1024)
+        manager = ManagerAllocator(
+            count=self.count,
+            manager_nb=manager_nb,
+            verbose=self._verbose - 1,
+            flush=self._flush,
+        )
         self._manager = manager
-
-        # SHARED counts
-        self.count = Counter(managers_nb=manager.manager_nb, length=1024)
 
         # CREATE processes
         self._processes: list[mp.Process] | None = self._create_processes()
@@ -125,7 +129,7 @@ class ProcessCoordinator:
         for p in self._processes: p.join()  # * cannot actually be None here.
 
         # CLOSE manager
-        self._manager.shutdown(self.count)
+        self._manager.shutdown()
 
     def exit(self) -> None:
         """
@@ -203,8 +207,8 @@ class ProcessCoordinator:
         """
 
         # SEND to manager
+        self._manager.count = self.count
         identifier = self._manager.submit(
-            count=self.count,
             number_of_tasks=number_of_tasks,
             function=function,
             results=results,
@@ -276,10 +280,12 @@ class ProcessCoordinator:
             manager_lock (mp_lock): the lock to synchronize access to the manager.
         """
 
+        # MANAGER populate
+        manager.count = count
         while True:
             # CHECK input
-            check = manager.check(count)
-            if check: fetch = manager.get(count) # input ready
+            check = manager.check()
+            if check: fetch = manager.get() # input ready
 
             # COUNT tasks
             count.stacks.plus()  # * acts as a lock.release()
@@ -291,7 +297,7 @@ class ProcessCoordinator:
 
             # FETCH task
             fetch, coordinator, result = fetch
-            if coordinator is not None: 
+            if coordinator is not None:
                 coordinator.count = count
                 fetch.kwargs['coordinator'] = coordinator
 
@@ -303,7 +309,7 @@ class ProcessCoordinator:
                 output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
             finally:
                 # PROCESS output
-                if result: manager.sort(count=count, identifier=fetch.identifier, data=output)
+                if result: manager.sort(identifier=fetch.identifier, data=output)
         count.close()
 
     def _single_worker_process(self) -> bool:
@@ -316,8 +322,8 @@ class ProcessCoordinator:
         """
 
         # CHECK input
-        check = self._manager.check(self.count)
-        if check: fetch = self._manager.get(self.count)  # input ready
+        check = self._manager.check()
+        if check: fetch = self._manager.get()  # input ready
 
         # COUNT tasks
         self.count.stacks.plus()  # * ~ .release()
@@ -347,8 +353,37 @@ class ProcessCoordinator:
         finally:
             # PROCESS output
             if result:
-                self._manager.sort(count=self.count, identifier=fetch.identifier, data=output)
+                self._manager.sort(identifier=fetch.identifier, data=output)
             return False
+
+    def _manager_numbers(self, managers: int | tuple[int, int]) -> tuple[int, int]:
+        """
+        To get the number of stacks and sorters to create.
+
+        Args:
+            managers (int | tuple[int, int]): the number of managers to create.
+
+        Raises:
+            ValueError: if the number of managers is less than 1.
+
+        Returns:
+            tuple[int, int]: the number of stacks and sorters to create.
+        """
+
+        if isinstance(managers, int):
+            # Need at least one manager for the code to run
+            if managers < 1: raise ValueError("Number of managers must be at least 1.")
+
+            if managers == 1:
+                # (0, STACK + SORTER)
+                manager_nb = (0, 1)
+            else:
+                # (STACK, SORTERs)
+                manager_nb = (1, managers - 1)
+        else:
+            # (STACKs, SORTERs)
+            manager_nb = managers
+        return manager_nb
 
 
 
@@ -359,10 +394,10 @@ if __name__ == "__main__":
     @Decorators.running_time(flush=True)
     def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
         task_id = coordinator.submit_tasks(
-            number_of_tasks=5,
+            number_of_tasks=50,
             function=task_function,
             same_kwargs={"x": x},
-            different_kwargs={"y": [i for i in range(5)]},
+            different_kwargs={"y": [i for i in range(50)]},
             results=True,
         )
         
@@ -383,11 +418,11 @@ if __name__ == "__main__":
 
     @Decorators.running_time(flush=True)
     def run():
-        with ProcessCoordinator(workers=4, managers=(2, 2), verbose=3, flush=True) as coordinator:
+        with ProcessCoordinator(workers=17, managers=(3, 3), verbose=3, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(
-                number_of_tasks=5,
+                number_of_tasks=50,
                 function=main_worker,
-                different_kwargs={"x": [i for i in range(5)]},
+                different_kwargs={"x": [i for i in range(50)]},
                 coordinator=coordinator,
             )
             

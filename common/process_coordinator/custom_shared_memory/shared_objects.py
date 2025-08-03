@@ -44,7 +44,7 @@ class SharedValue:
         # DATA n LOCK
         self._lock = mp.Lock()
         self._shm = SharedMemory(create=True, size=ctypes.sizeof(ctype))
-        self._value = ctypes.c_uint32.from_buffer(self._shm.buf)
+        self._value = ctype.from_buffer(self._shm.buf)
         self._value.value = 0
 
         # PICKLE compatibility

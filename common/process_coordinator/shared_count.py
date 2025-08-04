@@ -34,6 +34,8 @@ class Counter:
                 to be a power of 2. Defaults to 1024.
         """
 
+        self._close: bool = False
+
         self.group_id: SharedValue = SharedValue()
         self.stacks: SharedValue = SharedValue(ctype=ctypes.c_int64)
         self.sorters: SharedValue = SharedValue()
@@ -48,6 +50,9 @@ class Counter:
         Closing the shared memory objects.
         """
 
+        if self._close: return
+
+        self._close = True
         self.group_id.close()
         self.stacks.close()
         self.sorters.close()

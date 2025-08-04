@@ -30,7 +30,6 @@ all = ['ProcessCoordinator']
 
 class ProcessCoordinator:
     """
-    todo update docstring
     Creates a set number of processes once and uses them to run tasks.
     Nested multiprocessing is supported by passing the coordinator instance to the workers.
     Keep in mind that the target function will need a 'coordinator' if wanting to use nested
@@ -71,7 +70,7 @@ class ProcessCoordinator:
 
         # SETUP manager
         manager_nb = self._manager_numbers(managers)
-        self.count = Counter(managers_nb=manager_nb, length=1024)
+        self.count = Counter(managers_nb=manager_nb, length=4096)
         manager = ManagerAllocator(
             count=self.count,
             manager_nb=manager_nb,
@@ -268,16 +267,13 @@ class ProcessCoordinator:
     @staticmethod
     def _worker_process(manager: ManagerAllocator, count: Counter) -> None:
         """
-        todo update docstring
         To run the worker process that will fetch the tasks from the input stack and put the
         results into the results stack.
 
         Args:
-            input_stack (List): the stack to get the tasks from.
-            results (Results): the output to sort the results.
-            input_integer (Integer): the integer to track the number of tasks in the input stack.
-            results_integer (Integer): the integer to track the number of results in waiting.
-            manager_lock (mp_lock): the lock to synchronize access to the manager.
+            manager (ManagerAllocator): the manager to use to fetch the tasks and sort the results.
+            count (Counter): the shared memory counter to keep track of the number of tasks and
+                results.
         """
 
         # MANAGER populate

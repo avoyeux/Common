@@ -140,7 +140,6 @@ class ManagerAllocator:
             flush: bool = False,
         ) -> None:
         """
-        todo update docstring
         Sets up the manager allocator with the given number of managers.
         The public methods of this class are:
             - 'submit': to submit a group of tasks to the input stack.
@@ -153,7 +152,9 @@ class ManagerAllocator:
             - 'shutdown': to shutdown the managers.
 
         Args:
-            managers (int | tuple[int, int], optional): the number of managers to setup. When an
+            count (Counter): the shared memory counter to keep track of the number of tasks and
+                results.
+            manager_nb (int | tuple[int, int], optional): the number of managers to setup. When an
                 integer bigger than one, one manager is created for the input stack and the rest
                 are used for sorting the results. When a tuple, the first element is the number of
                 managers for the input stack and the second element is the number of managers for

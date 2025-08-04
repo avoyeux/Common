@@ -46,6 +46,7 @@ class SharedValue:
         self._shm = SharedMemory(create=True, size=ctypes.sizeof(ctype))
         self._value = ctype.from_buffer(self._shm.buf)
         self._value.value = 0
+        self._close: bool = False
 
         # PICKLE compatibility
         self._shm_name = self._shm.name
@@ -121,7 +122,12 @@ class SharedValue:
         Closing the shared memory.
         """
 
-        self._shm.close()
+        if self._close: return
+        self._close = True
+
+        # REFERENCEs delete
+        if hasattr(self, "_value"): del self._value
+        if hasattr(self, "_shm") and self._shm is not None: self._shm.close()
 
     def unlink(self) -> None:
         """

@@ -13,7 +13,6 @@ from .custom_manager import CustomManager, TaskIdentifier
 from typing import Any, Callable, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING:
     from .shared_count import Counter
-    from .task_allocator import ProcessCoordinator
     from .custom_manager.multiprocessing_manager import Results, Stack, TaskValue
 
 # API public
@@ -205,7 +204,6 @@ class ManagerAllocator:
             results: Literal[True],
             same_kwargs: dict[str, Any] = ...,
             different_kwargs: dict[str, list[Any]] = ...,
-            coordinator: ProcessCoordinator | None = ...,
         ) -> TaskIdentifier: ...
 
     @overload
@@ -216,7 +214,6 @@ class ManagerAllocator:
             results: Literal[False],
             same_kwargs: dict[str, Any] = ...,
             different_kwargs: dict[str, list[Any]] = ...,
-            coordinator: ProcessCoordinator | None = ...,
         ) -> None: ...
 
     # FALLBACK
@@ -228,7 +225,6 @@ class ManagerAllocator:
             results: bool = ...,
             same_kwargs: dict[str, Any] = ...,
             different_kwargs: dict[str, list[Any]] = ...,
-            coordinator: ProcessCoordinator | None = ...,
         ) -> TaskIdentifier | None: ...
 
     def submit(
@@ -238,13 +234,9 @@ class ManagerAllocator:
             results: bool = True,
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
-            coordinator: ProcessCoordinator | None = None,
         ) -> TaskIdentifier | None:
         """
         Submits a group of tasks to the input stack(s).
-        If you are planning to also submit tasks inside this call, then you should pass the
-        'ProcessCoordinator' instance to the function. Make sure that 'function' has a
-        'coordinator' keyword argument that will be set to the ProcessCoordinator instance.
 
         Args:
             number_of_tasks (int): the number of tasks to submit.
@@ -257,9 +249,6 @@ class ManagerAllocator:
             different_kwargs (dict[str, list[Any]], optional): the keyword arguments that are
                 different for each task. The keys should be the names of the keyword arguments and
                 the values should be lists of the values for each task. Defaults to an empty dict.
-            coordinator (ProcessCoordinator | None, optional): the coordinator instance to
-                associate with the tasks. Used if you want to do some nested multiprocessing.
-                Defaults to None.
 
         Returns:
             TaskIdentifier | None: the identifier of the group of tasks that were just added to the
@@ -293,7 +282,6 @@ class ManagerAllocator:
                 different_kwargs={
                     k: v[first_index:last_index + 1] for k, v in different_kwargs.items()
                 },
-                coordinator=coordinator,
                 results=results,
             )
 

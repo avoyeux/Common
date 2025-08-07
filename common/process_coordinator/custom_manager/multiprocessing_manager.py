@@ -15,8 +15,7 @@ from .manager_dataclass import TaskResult, TaskIdentifier, AllResults, FetchInfo
 
 # TYPE ANNOTATIONs
 from typing import Any, Protocol, cast, Iterable, Callable, Generator, TYPE_CHECKING
-if TYPE_CHECKING: from ..task_allocator import ProcessCoordinator  # ! gives a circular import
-type TaskValue = tuple[FetchInfo, ProcessCoordinator| None, bool]
+type TaskValue = tuple[FetchInfo, bool]
 
 # API public
 __all__ = ['CustomManager', 'TaskValue']
@@ -83,7 +82,6 @@ class Stack:
                 int,
                 Callable[..., Any],
                 Generator[dict[str, Any], None, None],
-                ProcessCoordinator | None,
                 bool,
             ]
         ] = []
@@ -98,13 +96,9 @@ class Stack:
             results: bool = True,
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
-            coordinator: ProcessCoordinator | None = None,
         ) -> None:
         """
         Submits a group of tasks to the input stack.
-        If you are planning to also submit tasks inside this call, then you should pass the
-        'ProcessCoordinator' instance to the function. Make sure that 'function' has a
-        'coordinator' keyword argument that will be set to the ProcessCoordinator instance.
 
         Args:
             group_id (int): the unique ID for the group of tasks.
@@ -120,9 +114,6 @@ class Stack:
             different_kwargs (dict[str, list[Any]], optional): the keyword arguments that are
                 different for each task in this group. The tasks will each take one element of the
                 list for each key. Defaults to {}.
-            coordinator (ProcessCoordinator | None, optional): the coordinator instance to
-                associate with the tasks. Used if you want to do some nested multiprocessing.
-                Defaults to None.
         """
 
         nb_of_tasks = last_task_index - first_task_index + 1
@@ -142,7 +133,6 @@ class Stack:
             group_id,
             function,
             generator,
-            coordinator,
             results,
         ))
 
@@ -160,7 +150,7 @@ class Stack:
         while True:
             (
                 index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
-                coordinator, results,
+                results,
             ) = self._list[-1]
 
             # CHECK generator
@@ -184,7 +174,7 @@ class Stack:
             function=function,
             kwargs=kwargs,
         )
-        return fetch_info, coordinator, results
+        return fetch_info, results
     
     def _index_generator(
             self,

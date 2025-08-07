@@ -30,11 +30,26 @@ all = ['ProcessCoordinator']
 
 class ProcessCoordinator:
     """
-    Creates a set number of processes once and uses them to run tasks.
-    Nested multiprocessing is supported by passing the coordinator instance to the workers.
-    Keep in mind that the target function will need a 'coordinator' if wanting to use nested
-    multiprocessing.
+    Singleton class that creates a set number of processes once and uses them to run tasks.
+    Nested multiprocessing is supported by calling the ProcessCoordinator class again (as it is a 
+    singleton).
     """
+
+    # CLASS ATTRIBUTEs singleton
+    _instance: ProcessCoordinator | None = None
+    _initialized: bool = False
+    _process_started: bool = False
+
+    def __new__(cls, *args, **kwargs) -> ProcessCoordinator:
+        """
+        To create a new instance of the ProcessCoordinator singleton.
+
+        Returns:
+            ProcessCoordinator: the singleton instance of the ProcessCoordinator.
+        """
+
+        if cls._instance is None: cls._instance = super().__new__(cls)
+        return cls._instance
 
     def __init__(
             self,
@@ -44,11 +59,11 @@ class ProcessCoordinator:
             flush: bool = False,
         ) -> None:
         """
-        Initializes the ProcessCoordinator with a set number of processes.
-        It will create a set number of processes once and uses them to run tasks.
-        Nested multiprocessing is supported by passing the coordinator instance to the workers.
-        Keep in mind that the target function will need a 'coordinator' if wanting to use nested
-        multiprocessing.
+        Initializes the ProcessCoordinator singleton with a set number of processes.
+        If ProcessCoordinator was already initialized, it will not reinitialise.
+        When initialised, it creates a set number of processes once and uses them to run tasks.
+        Nested multiprocessing is supported and can be done just by calling the ProcessCoordinator
+        class again (as it is a singleton). The given instance will be the 'same' as the main one.
         
         Args:
             workers (int): the max number of processes to create. Defaults to 2.
@@ -60,6 +75,9 @@ class ProcessCoordinator:
             verbose (int, optional): the verbosity level for the prints. Defaults to 1.
             flush (bool, optional): whether to flush the output. Defaults to False.
         """
+
+        # SINGLETON check
+        if self._initialized: return
 
         # ATTRIBUTEs from args
         self._total_processes = workers - 1  # * main process also acts as a worker hence -1
@@ -77,10 +95,13 @@ class ProcessCoordinator:
             verbose=self._verbose - 1,
             flush=self._flush,
         )
-        self._manager = manager
+        self.manager = manager
 
         # CREATE processes
         self._processes: list[mp.Process] | None = self._create_processes()
+
+        # SINGLETON initialized
+        self._initialized = True
 
     def __getstate__(self) -> dict[str, Any]:
         """
@@ -91,10 +112,13 @@ class ProcessCoordinator:
         """
 
         state = {
+            "_total_processes": self._total_processes,
+            "manager": self.manager,
+            "_processes": None,
+            "_instance": None,
+            "_initialized": False,
             "_verbose": self._verbose,
             "_flush": self._flush,
-            "_manager": self._manager,
-            "_processes": None,
         }
         return state
 
@@ -128,7 +152,7 @@ class ProcessCoordinator:
         for p in self._processes: p.join()  # * cannot actually be None here.
 
         # CLOSE manager
-        self._manager.shutdown()
+        self.manager.shutdown()
 
     def exit(self) -> None:
         """
@@ -146,7 +170,6 @@ class ProcessCoordinator:
             results: Literal[True] = ...,
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
-            coordinator: ProcessCoordinator | None = ...,
         ) -> TaskIdentifier: ...
     
     @overload
@@ -157,7 +180,6 @@ class ProcessCoordinator:
             results: Literal[False],
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
-            coordinator: ProcessCoordinator | None = ...,
         ) -> None: ...
     
     # FALLBACK
@@ -169,7 +191,6 @@ class ProcessCoordinator:
             results: bool = ...,
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
-            coordinator: ProcessCoordinator | None = ...,
         ) -> TaskIdentifier | None: ...
 
     def submit_tasks(
@@ -179,13 +200,9 @@ class ProcessCoordinator:
             results: bool = True,
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
-            coordinator: ProcessCoordinator | None = None,
         ) -> TaskIdentifier| None:
         """
         To submit a group of tasks to the input stack(s).
-        If you are planning to also submit tasks inside this call, then you should pass the
-        'ProcessCoordinator' instance to the function. Make sure that 'function' has a 
-        'coordinator' keyword argument for the nested multiprocessing to work.
 
         Args:
             number_of_tasks (int): the number of tasks to submit.
@@ -197,28 +214,25 @@ class ProcessCoordinator:
                 different for each task. The keys are the names of the keyword arguments and the
                 values are lists of values where each item is a value for a specific task.
                 Defaults to {}.
-            coordinator (ProcessCoordinator | None, optional): the coordinator to pass to the
-                function. Only do so if you want to do some nested multiprocessing.
-                Defaults to None.
         
         Returns:
             TaskIdentifier: the identifier of the task(s) that was(were) just submitted.
         """
 
         # SEND to manager
-        self._manager.count = self.count
-        identifier = self._manager.submit(
+        self.manager.count = self.count
+        identifier = self.manager.submit(
             number_of_tasks=number_of_tasks,
             function=function,
             results=results,
             same_kwargs=same_kwargs,
             different_kwargs=different_kwargs,
-            coordinator=coordinator,
         )
 
         # PROCESSEs start
-        if self._processes is not None:
+        if self._processes is not None and not self._process_started:
             for p in self._processes: p.start()
+            self._process_started = True
         return identifier
     
     def give(self, identifier: TaskIdentifier) -> list[Any]:
@@ -236,13 +250,13 @@ class ProcessCoordinator:
         """
         
         # CHECK if results ready
-        while not self._manager.full(identifier):
+        while not self.manager.full(identifier):
 
             # NEW task processing
             if self._single_worker_process(): time.sleep(1)
 
         # READY to get results
-        results = self._manager.give(identifier)
+        results = self.manager.give(identifier)
         return results
 
     def _create_processes(self) -> list[mp.Process]:
@@ -255,7 +269,7 @@ class ProcessCoordinator:
         """
 
         # PROCESS kwargs
-        kwargs = {'manager': self._manager, 'count': self.count}
+        kwargs = {'process_coordinator': self, 'count': self.count}
 
         # CREATE processes
         processes = [
@@ -265,37 +279,41 @@ class ProcessCoordinator:
         return processes
 
     @staticmethod
-    def _worker_process(manager: ManagerAllocator, count: Counter) -> None:
+    def _worker_process(process_coordinator: ProcessCoordinator, count: Counter) -> None:
         """
         To run the worker process that will fetch the tasks from the input stack and put the
         results into the results stack.
+        Also repopulates the ProcessCoordinator singleton instance so that the worker processes
+        can access the 'same' instance as the main process by just calling ProcessCoordinator().
 
         Args:
-            manager (ManagerAllocator): the manager to use to fetch the tasks and sort the results.
-            count (Counter): the shared memory counter to keep track of the number of tasks and
+            process_coordinator (ProcessCoordinator): the ProcessCoordinator instance gotten from
+                the main process.
+            count (Counter): the shared memory counters to keep track of the number of tasks and
                 results.
         """
 
-        # MANAGER populate
-        manager.count = count
+        # INSTANCE repopulate
+        process_coordinator = ProcessCoordinator._repopulate_self(process_coordinator, count)
+
         while True:
             # CHECK input
-            check = manager.check()
-            if check: fetch = manager.get() # input ready
+            check = process_coordinator.manager.check()
+            if check: fetch = process_coordinator.manager.get() # input ready
 
             # COUNT tasks
             count.stacks.plus()  # * acts as a lock.release()
 
             if check is None: 
-                print(f"\033[1;31mExiting a worker\033[0m", flush=manager._flush)
+                print(
+                    f"\033[1;31mExiting a worker\033[0m",
+                    flush=process_coordinator.manager._flush,
+                )
                 break  # all tasks done
             if not check: time.sleep(1); continue # wait for more tasks
 
             # FETCH task
-            fetch, coordinator, result = fetch
-            if coordinator is not None:
-                coordinator.count = count
-                fetch.kwargs['coordinator'] = coordinator
+            fetch, result = fetch
 
             # PROCESS run
             output = ''  # for results to never be undefined
@@ -305,8 +323,37 @@ class ProcessCoordinator:
                 output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
             finally:
                 # PROCESS output
-                if result: manager.sort(identifier=fetch.identifier, data=output)
+                if result: process_coordinator.manager.sort(identifier=fetch.identifier, data=output)
         count.close()
+
+    @staticmethod
+    def _repopulate_self(
+            process_coordinator: ProcessCoordinator,
+            count: Counter,
+        ) -> ProcessCoordinator:
+        """
+        To repopulate the ProcessCoordinator singleton instance so that the worker processes can
+        access the 'same' instance as the main process by just calling ProcessCoordinator().
+
+        Args:
+            process_coordinator (ProcessCoordinator): the ProcessCoordinator instance gotten from
+                the main process.
+            count (Counter): the counters used inside the ProcessCoordinator. Passed like so as
+                that class has Locks and shared memories that can only be inherited.
+
+        Returns:
+            ProcessCoordinator: the repopulated ProcessCoordinator instance.
+        """
+
+        # INSTANCE repopulate
+        ProcessCoordinator._instance = process_coordinator
+        ProcessCoordinator._instance._initialized = True
+        ProcessCoordinator._instance._process_started = True
+
+        # COUNT repopulate
+        ProcessCoordinator._instance.count = count
+        ProcessCoordinator._instance.manager.count = count
+        return ProcessCoordinator()
 
     def _single_worker_process(self) -> bool:
         """
@@ -318,8 +365,8 @@ class ProcessCoordinator:
         """
 
         # CHECK input
-        check = self._manager.check()
-        if check: fetch = self._manager.get()  # input ready
+        check = self.manager.check()
+        if check: fetch = self.manager.get()  # input ready
 
         # COUNT tasks
         self.count.stacks.plus()  # * ~ .release()
@@ -335,10 +382,7 @@ class ProcessCoordinator:
         if not check: return True  # wait for results
 
         # FETCH task
-        fetch, coordinator, result = fetch
-        if coordinator is not None:
-            coordinator.count = self.count
-            fetch.kwargs['coordinator'] = coordinator
+        fetch, result = fetch
 
         # PROCESS run
         output = ''  # for results to never be undefined
@@ -349,7 +393,7 @@ class ProcessCoordinator:
         finally:
             # PROCESS output
             if result:
-                self._manager.sort(identifier=fetch.identifier, data=output)
+                self.manager.sort(identifier=fetch.identifier, data=output)
             return False
 
     def _manager_numbers(self, managers: int | tuple[int, int]) -> tuple[int, int]:
@@ -388,7 +432,9 @@ if __name__ == "__main__":
     from typing import Any
 
     @Decorators.running_time(flush=True)
-    def main_worker(x: int, coordinator: ProcessCoordinator) -> list[Any]:
+    def main_worker(x: int) -> list[Any]:
+
+        coordinator = ProcessCoordinator()
         task_id = coordinator.submit_tasks(
             number_of_tasks=50,
             function=task_function,
@@ -406,20 +452,19 @@ if __name__ == "__main__":
         """
         A simple task function to test the ProcessCoordinator.
         """
-        [None for _ in range(10000) for j in range(1000)]  # Simulate some work
-        [None for _ in range(10000) for j in range(1000)]  # Simulate some work
 
+        [None for _ in range(10000) for j in range(1000)]  # Simulate some work
+        [None for _ in range(10000) for j in range(1000)]  # Simulate some work
         # print(f"Task {x} - {y} done", flush=True)
         return (x, y)
 
     @Decorators.running_time(flush=True)
     def run():
-        with ProcessCoordinator(workers=17, managers=(3, 3), verbose=3, flush=True) as coordinator:
+        with ProcessCoordinator(workers=8, managers=(3, 3), verbose=3, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(
                 number_of_tasks=50,
                 function=main_worker,
                 different_kwargs={"x": [i for i in range(50)]},
-                coordinator=coordinator,
             )
             
             # Wait for results

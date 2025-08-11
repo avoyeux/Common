@@ -39,7 +39,10 @@ class Counter:
         self.group_id: SharedValue = SharedValue()
         self.stacks: SharedValue = SharedValue(ctype=ctypes.c_int64)
         self.sorters: SharedValue = SharedValue()
-        self.list: SharedList = SharedList(length=length, nb_of_queues=managers_nb[0])
+        self.list: SharedList = SharedList(
+            length=length,
+            nb_of_queues=managers_nb[0] if managers_nb[0] > 0 else 1,
+        )
         self.dict: SharedDict = SharedDict(length=length, nb_of_queues=managers_nb[1])
 
     def __getstate__(self) -> dict[str, Any]: return self.__dict__

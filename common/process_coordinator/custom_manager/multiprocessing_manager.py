@@ -11,10 +11,11 @@ import threading
 from multiprocessing.managers import BaseManager
 
 # IMPORTs local
+from ..utils import IndexAllocator
 from .manager_dataclass import TaskResult, TaskIdentifier, AllResults, FetchInfo
 
 # TYPE ANNOTATIONs
-from typing import Any, Protocol, cast, Iterable, Callable, Generator, TYPE_CHECKING
+from typing import Any, Protocol, cast, Iterable, Callable, Generator, overload, Literal
 type TaskValue = tuple[FetchInfo, bool]
 
 # API public
@@ -96,6 +97,7 @@ class Stack:
             results: bool = True,
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
+            length_difference: bool = False,
         ) -> None:
         """
         Submits a group of tasks to the input stack.
@@ -112,19 +114,30 @@ class Stack:
             same_kwargs (dict[str, Any], optional): the keyword arguments that are the same for
                 all tasks in this group. Defaults to {}.
             different_kwargs (dict[str, list[Any]], optional): the keyword arguments that are
-                different for each task in this group. The tasks will each take one element of the
-                list for each key. Defaults to {}.
+                different for each task in this group. If 'length_difference' is False, the tasks
+                will each take one element of the list for each key. If it is True, then each task
+                will get a slice of items from each list. Defaults to {}.
+            length_difference (bool, optional): whether the lists in 'different_kwargs' for all the
+                queues have different lengths than the total number of tasks. This is to track if
+                each task should get a slice of items from each list or just a unique item.
+                Defaults to False.
         """
-
         nb_of_tasks = last_task_index - first_task_index + 1
-        generator = self._input_generator(nb_of_tasks, same_kwargs, different_kwargs)
+        # KWARGS generator
+        generator = self._input_generator(
+            number_of_tasks=nb_of_tasks, 
+            same_kwargs=same_kwargs,
+            different_kwargs=different_kwargs,
+            length_difference=length_difference,
+        )
+
 
         # INDEX generator
         index_generator = self._index_generator(
             first_index=first_task_index,
             last_index=last_task_index,
         )
-        
+
         # ADD tasks to waiting list
         self._list.append((
             index_generator,
@@ -152,7 +165,6 @@ class Stack:
                 index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
                 results,
             ) = self._list[-1]
-
             # CHECK generator
             index = next(index_generator)
             if index is not None: break
@@ -196,12 +208,41 @@ class Stack:
         for i in range(first_index, last_index + 1): yield i
         yield None  # done
 
+    @overload
     def _input_generator(
             self,
             number_of_tasks: int,
             same_kwargs: dict[str, Any],
             different_kwargs: dict[str, list[Any]],
-        ) -> Generator[dict[str, Any], None, None]:
+            length_difference: Literal[False],
+        ) -> Generator[dict[str, Any], None, None]: ...
+    
+    @overload
+    def _input_generator(
+            self,
+            number_of_tasks: int,
+            same_kwargs: dict[str, Any],
+            different_kwargs: dict[str, list[Any]],
+            length_difference: Literal[True],
+        ) -> Generator[dict[str, list[Any]], None, None]: ...
+    
+    # FALLBACK
+    @overload
+    def _input_generator(
+            self,
+            number_of_tasks: int,
+            same_kwargs: dict[str, Any],
+            different_kwargs: dict[str, list[Any]],
+            length_difference: bool,
+        ) -> Generator[dict[str, Any] | dict[str, list[Any]], None, None]: ...
+
+    def _input_generator(
+            self,
+            number_of_tasks: int,
+            same_kwargs: dict[str, Any],
+            different_kwargs: dict[str, list[Any]],
+            length_difference: bool,
+        ) -> Generator[dict[str, Any] | dict[str, list[Any]], None, None]:
         """
         Generator to yield the keyword arguments for each task.
 
@@ -210,17 +251,39 @@ class Stack:
             same_kwargs (dict[str, Any]): the keyword arguments that are the same for all tasks in
                 this group.
             different_kwargs (dict[str, list[Any]]): the keyword arguments that are different for
-                each task in this group. The tasks will each take one element of the list for each
-                key.
+                each task in this group. If not 'length_difference', the generator will yield one
+                unique item of each list for each key. If True, then the lists are partitioned
+                across the tasks. Hence, each tasks will still get a list of items for each key
+                (but slices of the initial lists).
+            length_difference (bool): whether the lists in different_kwargs for all the queues have
+                different lengths than the total number of tasks. This is to track if each task
+                should get a slice of items from each list or just a unique item.
 
         Yields:
             Generator[dict[str, Any], None, None]: the generator yielding the keyword arguments for
                 each task.
         """
 
-        for i in range(number_of_tasks):
-            different = {k: v[i] for k, v in different_kwargs.items()}
-            yield {**same_kwargs, **different}
+        # CHECK args length
+        if length_difference:
+            list_length = len(next(iter(different_kwargs.values())))
+            args_per_task = IndexAllocator.valid_indexes(
+                number_of_tasks=list_length,
+                nb_of_queues=number_of_tasks,
+            )
+
+            for i in range(number_of_tasks):
+                first_index = sum(args_per_task[:i])
+                last_index = first_index + args_per_task[i] - 1
+                different = {
+                    k: v[first_index: last_index + 1] for k, v in different_kwargs.items()
+                }
+                yield {**same_kwargs, **different}
+        else:
+            # SAME number of args and tasks
+            for i in range(number_of_tasks):
+                different = {k: v[i] for k, v in different_kwargs.items()}
+                yield {**same_kwargs, **different}
 
 
 class Results:

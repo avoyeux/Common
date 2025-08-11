@@ -6,7 +6,11 @@ not doing anything while waiting for the manager to serialize the data.
 """
 from __future__ import annotations
 
+# IMPORTs standard
+import time
+
 # IMPORTs local
+from .utils import IndexAllocator
 from .custom_manager import CustomManager, TaskIdentifier
 
 # TYPE ANNOTATIONs
@@ -71,51 +75,6 @@ class StartedSorter:
     def __setstate__(self, state: dict[str, Any]) -> None: self.__dict__.update(state)
 
 
-class IndexAllocator:
-    """
-    Computes the number of tasks needed for each queue.
-
-    There is one public (staticmethod) function:
-        - 'valid_indexes': to get the number of tasks per queue. If no tasks for a certain queue,
-            then the corresponding item doesn't exist.
-    """
-
-    @staticmethod
-    def valid_indexes(number_of_tasks: int, nb_of_queues: int) -> list[int]:
-        """
-        To get the number of tasks per queue. If there is not enough tasks to fill all the queues,
-        then the last queue indexes are empty, hence the len(list[int]) return will be smaller
-        than the number of queues.
-
-        Args:
-            number_of_tasks (int): the total number of tasks for the same group of tasks.
-            nb_of_queues (int): the number of queues to distribute the tasks across.
-
-        Returns:
-            list[int]: list of the number of tasks for each queue.
-        """
-
-        index_partition = IndexAllocator._partition_integer(total=number_of_tasks, n=nb_of_queues)
-        return [n for n in index_partition if n > 0]
-
-    @staticmethod
-    def _partition_integer(total: int, n: int) -> list[int]:
-        """
-        Partition an integer into n parts as evenly as possible.
-        This is done so that each submit partitions the tasks evenly across the managed stacks.
-
-        Args:
-            total (int): the total number to partition.
-            n (int): the number of parts to partition into.
-
-        Returns:
-            list[int]: the partition sizes.
-        """
-
-        coef, res = divmod(total, n)
-        return [coef + 1] * res + [coef] * (n - res)
-
-
 class ManagerAllocator:
     """
     To allocate managers to the process coordinator.
@@ -163,16 +122,14 @@ class ManagerAllocator:
                 Defaults to False.
         """
 
-        # ATTRIBUTEs
-        self._manager_nb = manager_nb
-
         # SHARED values, stack(s), sorter(s)
         self.count = count
         self._stacks: list[StartedStack] = [StartedStack() for _ in range(manager_nb[0])]
         self._sorters: list[StartedSorter] = [StartedSorter() for _ in range(manager_nb[1])]
         if not self._stacks: self._stacks = [self._sorters[0]]
 
-        # ATTRIBUTEs settings
+        # ATTRIBUTEs
+        self._manager_nb = (manager_nb[0] if manager_nb[0] > 0 else 1, manager_nb[1])
         self._verbose = verbose
         self._flush = flush
 
@@ -236,6 +193,7 @@ class ManagerAllocator:
             different_kwargs: dict[str, list[Any]] = {},
         ) -> TaskIdentifier | None:
         """
+        todo update docstring for 'number_of_tasks' != len(different_kwargs.values())) (not always)
         Submits a group of tasks to the input stack(s).
 
         Args:
@@ -257,33 +215,91 @@ class ManagerAllocator:
 
         # IDENTIFIER
         group_id = self.count.group_id.plus()
+        print(f"ID: {group_id} tasks: {number_of_tasks}", flush=True)
 
         # SETUP queue index trackers
         self.count.list.add(total_tasks=number_of_tasks)
         self.count.dict.set(key=group_id, total_tasks=number_of_tasks)
 
-        # INDEXes
-        valid_values = IndexAllocator.valid_indexes(
-            number_of_tasks=number_of_tasks,
-            nb_of_queues=self._manager_nb[0],
-        )
+        # CHECK kwargs
+        if (
+            (not different_kwargs) or 
+            ((different_len := len(next(iter(different_kwargs.values())))) == number_of_tasks)
+            ):
 
-        # SEND to stack(s)
-        for stack_index, n in enumerate(valid_values):
-            first_index = sum(valid_values[:stack_index])
-            last_index = first_index + n - 1
-            self._stacks[stack_index].stack.put(
-                group_id=group_id,
-                total_tasks=number_of_tasks,
-                first_task_index=first_index,
-                last_task_index=last_index,
-                function=function,
-                same_kwargs=same_kwargs,
-                different_kwargs={
-                    k: v[first_index:last_index + 1] for k, v in different_kwargs.items()
-                },
-                results=results,
+            valid_values = IndexAllocator.valid_indexes(
+                number_of_tasks=number_of_tasks,
+                nb_of_queues=self._manager_nb[0],
             )
+            # SEND to stack(s)
+            for stack_index, n in enumerate(valid_values):
+                first_index = sum(valid_values[:stack_index])
+                last_index = first_index + n - 1
+                self._stacks[stack_index].stack.put(
+                    group_id=group_id,
+                    total_tasks=number_of_tasks,
+                    first_task_index=first_index,
+                    last_task_index=last_index,
+                    function=function,
+                    same_kwargs=same_kwargs,
+                    different_kwargs={
+                        k: v[first_index:last_index + 1] for k, v in different_kwargs.items()
+                    },
+                    results=results,
+                )
+        # AGRs partitioning
+        else:
+            if different_len < number_of_tasks:
+                raise ValueError(
+                    f"'number_of_tasks' ({number_of_tasks}) is bigger than the length of the "
+                    f"lists for the different kwargs (i.e. {different_len}). While it is allowed "
+                    "to do the opposite, it is not allowed to have more tasks than different "
+                    "kwargs values."
+                )
+            
+            if self._verbose > 2: 
+                print(
+                    f"\033[91mWarning: 'number of tasks' ({number_of_tasks}) does not match "
+                    f"the length of 'different_kwargs' ({different_len}). Slicing "
+                    f"'different_kwargs' in sections. {function.__qualname__} will receive a "
+                    "list for the 'different_kwargs' keys.\033[0m",
+                    flush=self._flush,
+                )
+
+            # INDEXes
+            tasks_per_stack = IndexAllocator.valid_indexes(
+                number_of_tasks=number_of_tasks,
+                nb_of_queues=self._manager_nb[0],
+            )
+            args_per_task = IndexAllocator.valid_indexes(
+                number_of_tasks=different_len,
+                nb_of_queues=number_of_tasks,
+            )  # * could do it for each key value. Better to let user ensure same size lists.
+
+            for stack_index, n in enumerate(tasks_per_stack):
+                # TASK INDEXes
+                first_index = sum(tasks_per_stack[:stack_index])
+                last_index = first_index + n - 1
+
+                # ARGs
+                first_args_index = sum(args_per_task[:first_index])
+                las_args_index = sum(args_per_task[:last_index + 1])
+
+                # SUBMIT to stack(s)
+                self._stacks[stack_index].stack.put(
+                    group_id=group_id,
+                    total_tasks=number_of_tasks,
+                    first_task_index=first_index,
+                    last_task_index=last_index,
+                    function=function,
+                    same_kwargs=same_kwargs,
+                    different_kwargs={
+                        k: v[first_args_index:las_args_index + 1]
+                        for k, v in different_kwargs.items()
+                    },
+                    results=results,
+                    length_difference=True,
+                )
 
         # COUNTs (needs to be put after the stack is updated)
         self.count.stacks.plus(number_of_tasks)
@@ -304,13 +320,18 @@ class ManagerAllocator:
 
         Returns:
             TaskValue: the information needed to run the task.
+            
         """
 
         # COUNT
-        self.count.stacks.minus()
-        
+        value = self.count.stacks.minus()
+
+        # SPECIAL CASE where timing is off as manager is still not ready
+        # if value == -1: time.sleep(0.05)  # -1 (not 0) as value is offset by 1 to act as a lock
+
         # STACK choose
         stack_index = self.count.list.next()
+        self._stacks[stack_index]
         return self._stacks[stack_index].stack.get()
 
     def sort(self, identifier: TaskIdentifier, data: Any) -> None:

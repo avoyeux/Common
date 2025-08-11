@@ -88,7 +88,7 @@ class ProcessCoordinator:
 
         # SETUP manager
         manager_nb = self._manager_numbers(managers)
-        self.count = Counter(managers_nb=manager_nb, length=4096)
+        self.count = Counter(managers_nb=manager_nb, length=256)
         manager = ManagerAllocator(
             count=self.count,
             manager_nb=manager_nb,
@@ -202,6 +202,7 @@ class ProcessCoordinator:
             different_kwargs: dict[str, list[Any]] = {},
         ) -> TaskIdentifier| None:
         """
+        todo update docstring for 'number_of_tasks' != len(different_kwargs.values()) (not always)
         To submit a group of tasks to the input stack(s).
 
         Args:
@@ -253,7 +254,7 @@ class ProcessCoordinator:
         while not self.manager.full(identifier):
 
             # NEW task processing
-            if self._single_worker_process(): time.sleep(1)
+            if self._single_worker_process(): print("waiting full", flush=True); time.sleep(1)
 
         # READY to get results
         results = self.manager.give(identifier)
@@ -310,7 +311,7 @@ class ProcessCoordinator:
                     flush=process_coordinator.manager._flush,
                 )
                 break  # all tasks done
-            if not check: time.sleep(1); continue # wait for more tasks
+            if not check: print("waiting", flush=True); time.sleep(1); continue # wait for more tasks
 
             # FETCH task
             fetch, result = fetch

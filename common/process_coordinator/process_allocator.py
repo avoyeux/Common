@@ -221,7 +221,7 @@ class ProcessCoordinator:
         """
 
         # SEND to manager
-        self.manager.count = self.count
+        self.manager.count = self.count  # ! do I still need this?
         identifier = self.manager.submit(
             number_of_tasks=number_of_tasks,
             function=function,
@@ -433,21 +433,24 @@ if __name__ == "__main__":
     from typing import Any
 
     @Decorators.running_time(flush=True)
-    def main_worker(x: int) -> list[Any]:
-
+    def main_worker(x: list[int]) -> list[Any]:
         coordinator = ProcessCoordinator()
-        task_id = coordinator.submit_tasks(
-            number_of_tasks=50,
-            function=task_function,
-            same_kwargs={"x": x},
-            different_kwargs={"y": [i for i in range(50)]},
-            results=True,
-        )
-        
-        # Wait for results
-        results = coordinator.give(task_id)
-        print(f"results for task {x}: {results}", flush=True)
-        return results
+
+        res = []
+        for val in x:
+            task_id = coordinator.submit_tasks(
+                number_of_tasks=5,
+                function=task_function,
+                same_kwargs={"x": val},
+                different_kwargs={"y": [i for i in range(5)]},
+                results=True,
+            )
+            
+            # Wait for results
+            results = coordinator.give(task_id)
+            print(f"results for task {val}: {results}", flush=True)
+            res.append(results)
+        return res
 
     def task_function(x: int, y: int) -> tuple[int, int]:
         """
@@ -455,21 +458,21 @@ if __name__ == "__main__":
         """
 
         [None for _ in range(10000) for j in range(1000)]  # Simulate some work
-        [None for _ in range(10000) for j in range(1000)]  # Simulate some work
+        # [None for _ in range(10000) for j in range(1000)]  # Simulate some work
         # print(f"Task {x} - {y} done", flush=True)
         return (x, y)
 
     @Decorators.running_time(flush=True)
     def run():
-        with ProcessCoordinator(workers=8, managers=(3, 3), verbose=3, flush=True) as coordinator:
+        with ProcessCoordinator(workers=8, managers=(3, 3), verbose=5, flush=True) as coordinator:
             task_id = coordinator.submit_tasks(
-                number_of_tasks=50,
+                number_of_tasks=5,
                 function=main_worker,
-                different_kwargs={"x": [i for i in range(50)]},
+                different_kwargs={"x": [i for i in range(10)]},
             )
             
             # Wait for results
             results = coordinator.give(task_id)
-            print(f'Final results: {results}', flush=True)
+            print(f'Done indexes are: {[res[0][0] for sublist in results for res in sublist]}', flush=True)
         print("ProcessCoordinator exited cleanly.")
     run()

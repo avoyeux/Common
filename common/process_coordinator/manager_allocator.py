@@ -283,7 +283,8 @@ class ManagerAllocator:
 
                 # ARGs
                 first_args_index = sum(args_per_task[:first_index])
-                las_args_index = sum(args_per_task[:last_index + 1])
+                last_args_index = sum(args_per_task[:last_index + 1]) - 1
+                # print(f"first_args_index: {first_args_index}, last_args_index: {last_args_index}", flush=True)
 
                 # SUBMIT to stack(s)
                 self._stacks[stack_index].stack.put(
@@ -294,7 +295,7 @@ class ManagerAllocator:
                     function=function,
                     same_kwargs=same_kwargs,
                     different_kwargs={
-                        k: v[first_args_index:las_args_index + 1]
+                        k: v[first_args_index:last_args_index + 1]
                         for k, v in different_kwargs.items()
                     },
                     results=results,

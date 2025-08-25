@@ -139,4 +139,4 @@ class ConfigToObject:
     @property
     def config(self) -> DictToObj: return self._config
 
-config = ConfigToObject().config
+config = ConfigToObject().config if os.path.exists(os.path.join(root_path, "config.yml")) else None

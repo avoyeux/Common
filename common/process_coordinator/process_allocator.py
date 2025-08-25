@@ -254,7 +254,9 @@ class ProcessCoordinator:
         while not self.manager.full(identifier):
 
             # NEW task processing
-            if self._single_worker_process(): print("waiting full", flush=True); time.sleep(1)
+            if self._single_worker_process():
+                if self._verbose > 1: print("\033[90mWaiting full...\033[0m", flush=True)
+                time.sleep(1)
 
         # READY to get results
         results = self.manager.give(identifier)
@@ -311,7 +313,10 @@ class ProcessCoordinator:
                     flush=process_coordinator.manager._flush,
                 )
                 break  # all tasks done
-            if not check: print("waiting", flush=True); time.sleep(1); continue # wait for more tasks
+            if not check:
+                if process_coordinator._verbose > 1: print("\033[90mWaiting...\033[0m", flush=True)
+                time.sleep(1)
+                continue # wait for more tasks
 
             # FETCH task
             fetch, result = fetch

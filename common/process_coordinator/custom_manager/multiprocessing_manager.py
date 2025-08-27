@@ -87,6 +87,8 @@ class Stack:
             ]
         ] = []
 
+        self._lock = threading.Lock()
+
     def put(
             self,
             group_id: int,
@@ -122,6 +124,8 @@ class Stack:
                 each task should get a slice of items from each list or just a unique item.
                 Defaults to False.
         """
+
+        self._lock.acquire()
         nb_of_tasks = last_task_index - first_task_index + 1
         # KWARGS generator
         generator = self._input_generator(
@@ -130,7 +134,6 @@ class Stack:
             different_kwargs=different_kwargs,
             length_difference=length_difference,
         )
-
 
         # INDEX generator
         index_generator = self._index_generator(
@@ -148,6 +151,7 @@ class Stack:
             generator,
             results,
         ))
+        self._lock.release()
 
     def get(self) -> TaskValue:
         """
@@ -160,32 +164,44 @@ class Stack:
             TaskValue: the corresponding task to be run by the workers.
         """
 
-        while True:
-            (
-                index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
-                results,
-            ) = self._list[-1]
-            # CHECK generator
-            index = next(index_generator)
-            if index is not None: break
+        self._lock.acquire()
+        try:
+            while True:
+                (
+                    index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
+                    results,
+                ) = self._list[-1]
+                # CHECK generator
+                index = next(index_generator)
+                if index is not None: break
 
-            # POP finished tasks
-            self._list.pop()
-        
-        # GET kwargs
-        kwargs = next(kwargs_generator)
+                # POP finished tasks
+                self._list.pop()
+            
+            # GET kwargs
+            kwargs = next(kwargs_generator)
+        except Exception as e:
+            print("\033[1;32mFailed to get the value\033[0m")
+            print(e, flush=True)
+            raise e
+        self._lock.release()
 
-        # FORMAT FetchInfo
-        fetch_info = FetchInfo(
-            identifier=TaskIdentifier(
-                index=index,
-                group_id=group_id,
-                total_tasks=total_tasks,
-                group_tasks=group_tasks,
-            ),
-            function=function,
-            kwargs=kwargs,
-        )
+        try:
+            # FORMAT FetchInfo
+            fetch_info = FetchInfo(
+                identifier=TaskIdentifier(
+                    index=index,
+                    group_id=group_id,
+                    total_tasks=total_tasks,
+                    group_tasks=group_tasks,
+                ),
+                function=function,
+                kwargs=kwargs,
+            )
+        except Exception as e:
+            print("\033[1;32mWhat the fuck\033[0m")
+            print(e, flush=True)
+            raise e
         return fetch_info, results
     
     def _index_generator(

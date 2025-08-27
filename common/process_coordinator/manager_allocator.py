@@ -332,8 +332,13 @@ class ManagerAllocator:
 
         # STACK choose
         stack_index = self.count.list.next()
-        self._stacks[stack_index]
-        return self._stacks[stack_index].stack.get()
+        try:
+            result = self._stacks[stack_index].stack.get()
+        except Exception as e:
+            print(f"Failed for index {stack_index}")
+            print(e, flush=True)
+            raise e
+        return result
 
     def sort(self, identifier: TaskIdentifier, data: Any) -> None:
         """

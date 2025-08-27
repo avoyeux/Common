@@ -221,7 +221,8 @@ class ProcessCoordinator:
         """
 
         # SEND to manager
-        self.manager.count = self.count  # ! do I still need this?
+        print(f"first layer of submitting", flush=True)
+        # self.manager.count = self.count  # ! do I still need this?
         identifier = self.manager.submit(
             number_of_tasks=number_of_tasks,
             function=function,
@@ -229,7 +230,7 @@ class ProcessCoordinator:
             same_kwargs=same_kwargs,
             different_kwargs=different_kwargs,
         )
-
+        print(f"first layer worked", flush=True)
         # PROCESSEs start
         if self._processes is not None and not self._process_started:
             for p in self._processes: p.start()

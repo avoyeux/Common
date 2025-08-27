@@ -212,21 +212,17 @@ class ManagerAllocator:
             TaskIdentifier | None: the identifier of the group of tasks that were just added to the
                 stack. None if 'results' is False.
         """
-
+        print("second layer of submitting", flush=True)
         # IDENTIFIER
         group_id = self.count.group_id.plus()
         print(f"ID: {group_id} tasks: {number_of_tasks}", flush=True)
-
-        # SETUP queue index trackers
-        self.count.list.add(total_tasks=number_of_tasks)
-        self.count.dict.set(key=group_id, total_tasks=number_of_tasks)
 
         # CHECK kwargs
         if (
             (not different_kwargs) or 
             ((different_len := len(next(iter(different_kwargs.values())))) == number_of_tasks)
             ):
-
+            print("should be here", flush=True)
             valid_values = IndexAllocator.valid_indexes(
                 number_of_tasks=number_of_tasks,
                 nb_of_queues=self._manager_nb[0],
@@ -235,6 +231,11 @@ class ManagerAllocator:
             for stack_index, n in enumerate(valid_values):
                 first_index = sum(valid_values[:stack_index])
                 last_index = first_index + n - 1
+
+                print(f"stack index is {stack_index}", flush=True)
+                print(f"self._stack type is {type(self._stacks)}", flush=True)
+                print(f"self._stack[stack_index] type is {type(self._stacks[stack_index])}", flush=True)
+                print(f"self._stack[stack_index].stack type is {type(self._stacks[stack_index].stack)}", flush=True)
                 self._stacks[stack_index].stack.put(
                     group_id=group_id,
                     total_tasks=number_of_tasks,
@@ -249,6 +250,7 @@ class ManagerAllocator:
                 )
         # AGRs partitioning
         else:
+            print("should not be here", flush=True)
             if different_len < number_of_tasks:
                 raise ValueError(
                     f"'number_of_tasks' ({number_of_tasks}) is bigger than the length of the "
@@ -302,10 +304,6 @@ class ManagerAllocator:
                     length_difference=True,
                 )
 
-        # COUNTs (needs to be put after the stack is updated)
-        self.count.stacks.plus(number_of_tasks)
-        self.count.sorters.plus()
-
         # IDENTIFIER to return group results
         identifier = TaskIdentifier(
             index=0,  # not used
@@ -313,6 +311,13 @@ class ManagerAllocator:
             total_tasks=number_of_tasks,
             group_tasks=0,
         ) if results else None
+
+        # COUNTs (needs to be put after the stack is updated)
+        self.count.stacks.plus(number_of_tasks)
+        self.count.sorters.plus()
+        self.count.list.add(total_tasks=number_of_tasks)
+        self.count.dict.set(key=group_id, total_tasks=number_of_tasks)
+        print('second layer done', flush=True)
         return identifier
 
     def get(self) -> TaskValue:

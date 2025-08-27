@@ -124,8 +124,9 @@ class Stack:
                 each task should get a slice of items from each list or just a unique item.
                 Defaults to False.
         """
-
+        print(f"inside stack put", flush=True)
         self._lock.acquire()
+        print(f"lock acquired", flush=True)
         nb_of_tasks = last_task_index - first_task_index + 1
         # KWARGS generator
         generator = self._input_generator(
@@ -141,6 +142,7 @@ class Stack:
             last_index=last_task_index,
         )
 
+        print(f"generators created", flush=True)
         # ADD tasks to waiting list
         self._list.append((
             index_generator,
@@ -151,7 +153,9 @@ class Stack:
             generator,
             results,
         ))
+        print("list appended", flush=True)
         self._lock.release()
+        print("value added to stack", flush=True)
 
     def get(self) -> TaskValue:
         """
@@ -165,43 +169,44 @@ class Stack:
         """
 
         self._lock.acquire()
-        try:
-            while True:
+        while True:
+            try:
                 (
                     index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
                     results,
                 ) = self._list[-1]
+            except Exception as e:
+                print("\033[1;75mFailed to get the value\033[0m")
+                print(e, flush=True)
+                raise e
+
+            try:
                 # CHECK generator
                 index = next(index_generator)
                 if index is not None: break
 
                 # POP finished tasks
                 self._list.pop()
-            
-            # GET kwargs
-            kwargs = next(kwargs_generator)
-        except Exception as e:
-            print("\033[1;32mFailed to get the value\033[0m")
-            print(e, flush=True)
-            raise e
+            except Exception as e:
+                print("\033[1;75mFailed to next and pop\033[0m")
+                print(e, flush=True)
+                raise e
+        
+        # GET kwargs
+        kwargs = next(kwargs_generator)
         self._lock.release()
 
-        try:
-            # FORMAT FetchInfo
-            fetch_info = FetchInfo(
-                identifier=TaskIdentifier(
-                    index=index,
-                    group_id=group_id,
-                    total_tasks=total_tasks,
-                    group_tasks=group_tasks,
-                ),
-                function=function,
-                kwargs=kwargs,
-            )
-        except Exception as e:
-            print("\033[1;32mWhat the fuck\033[0m")
-            print(e, flush=True)
-            raise e
+        # FORMAT FetchInfo
+        fetch_info = FetchInfo(
+            identifier=TaskIdentifier(
+                index=index,
+                group_id=group_id,
+                total_tasks=total_tasks,
+                group_tasks=group_tasks,
+            ),
+            function=function,
+            kwargs=kwargs,
+        )
         return fetch_info, results
     
     def _index_generator(

@@ -403,10 +403,7 @@ class ManagerAllocator:
         stack_check = (stack_value <= -1)
         sorter_check = (sorter_value == 0)
         if stack_check:
-            if sorter_check:
-                if self._verbose > 0:
-                    print("\033[1;31mAll tasks and results processed.\033[0m", flush=self._flush)
-                return None  # all tasks done
+            if sorter_check: return None  # all tasks done
             return False  # wait for results
         return True  # stack ready to process
 

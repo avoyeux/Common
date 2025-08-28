@@ -56,6 +56,7 @@ class ProcessCoordinator:
             self,
             workers: int = 2,
             managers: int | tuple[int, int] = 1,
+            id_length: int = 256,
             verbose: int = 1,
             flush: bool = False,
         ) -> None:
@@ -73,6 +74,9 @@ class ProcessCoordinator:
                 one input stack and one results stack. If a tuple is passed, then it will create
                 that many managers with the first element being the number of input stacks and
                 the second element being the number of results stacks. Defaults to 1.
+            id_length (int, optional): the length of the fixed size custom list and dict. Fixed
+                length as they are used in a shared memory context (they give the metadata needed
+                to choose tasks in the multiprocessing context). Defaults to 256.
             verbose (int, optional): the verbosity level for the prints. Defaults to 1.
             flush (bool, optional): whether to flush the output. Defaults to False.
         """
@@ -89,7 +93,7 @@ class ProcessCoordinator:
 
         # SETUP manager
         manager_nb = self._manager_numbers(managers)
-        self.count = Counter(managers_nb=manager_nb, length=256)
+        self.count = Counter(managers_nb=manager_nb, length=id_length)
         manager = ManagerAllocator(
             count=self.count,
             manager_nb=manager_nb,

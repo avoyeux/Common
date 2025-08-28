@@ -6,6 +6,7 @@ independently of how nested the multiprocessing is and how many tasks you want t
 from __future__ import annotations
 
 # IMPORTs standard
+from itertools import count
 import time
 
 # IMPORTs alias
@@ -221,8 +222,6 @@ class ProcessCoordinator:
         """
 
         # SEND to manager
-        print(f"first layer of submitting", flush=True)
-        # self.manager.count = self.count  # ! do I still need this?
         identifier = self.manager.submit(
             number_of_tasks=number_of_tasks,
             function=function,
@@ -230,7 +229,7 @@ class ProcessCoordinator:
             same_kwargs=same_kwargs,
             different_kwargs=different_kwargs,
         )
-        print(f"first layer worked", flush=True)
+
         # PROCESSEs start
         if self._processes is not None and not self._process_started:
             for p in self._processes: p.start()
@@ -256,7 +255,7 @@ class ProcessCoordinator:
 
             # NEW task processing
             if self._single_worker_process():
-                if self._verbose > 1: print("\033[90mWaiting full...\033[0m", flush=True)
+                if self._verbose > 3: print("\033[90mWaiting full...\033[0m", flush=True)
                 time.sleep(0.5)
 
         # READY to get results
@@ -307,15 +306,14 @@ class ProcessCoordinator:
 
             # COUNT tasks
             count.stacks.plus()  # * acts as a lock.release()
-
-            if check is None: 
+            if check is None:
                 print(
                     f"\033[1;31mExiting a worker\033[0m",
                     flush=process_coordinator.manager._flush,
                 )
                 break  # all tasks done
             if not check:
-                if process_coordinator._verbose > 1: print("\033[90mWaiting...\033[0m", flush=True)
+                if process_coordinator._verbose > 3: print("\033[90mWaiting...\033[0m", flush=True)
                 time.sleep(0.5)
                 continue # wait for more tasks
 

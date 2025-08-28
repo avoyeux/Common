@@ -96,7 +96,6 @@ if __name__ == "__main__":
 
     def worker_minus(count: Counter) -> None:
         for i in range(10):
-            # print(f"first key value is {count.dict.get(key=1)}", flush=True)
             next_value = count.list.next()
             print(f"next value is {next_value}", flush=True)
     

@@ -212,17 +212,16 @@ class ManagerAllocator:
             TaskIdentifier | None: the identifier of the group of tasks that were just added to the
                 stack. None if 'results' is False.
         """
-        print("second layer of submitting", flush=True)
+
         # IDENTIFIER
         group_id = self.count.group_id.plus()
-        print(f"ID: {group_id} tasks: {number_of_tasks}", flush=True)
+        if self._verbose > 0: print(f"ID: {group_id} tasks: {number_of_tasks}", flush=self._flush)
 
         # CHECK kwargs
         if (
             (not different_kwargs) or 
             ((different_len := len(next(iter(different_kwargs.values())))) == number_of_tasks)
             ):
-            print("should be here", flush=True)
             valid_values = IndexAllocator.valid_indexes(
                 number_of_tasks=number_of_tasks,
                 nb_of_queues=self._manager_nb[0],
@@ -232,10 +231,6 @@ class ManagerAllocator:
                 first_index = sum(valid_values[:stack_index])
                 last_index = first_index + n - 1
 
-                print(f"stack index is {stack_index}", flush=True)
-                print(f"self._stack type is {type(self._stacks)}", flush=True)
-                print(f"self._stack[stack_index] type is {type(self._stacks[stack_index])}", flush=True)
-                print(f"self._stack[stack_index].stack type is {type(self._stacks[stack_index].stack)}", flush=True)
                 self._stacks[stack_index].stack.put(
                     group_id=group_id,
                     total_tasks=number_of_tasks,
@@ -250,7 +245,6 @@ class ManagerAllocator:
                 )
         # AGRs partitioning
         else:
-            print("should not be here", flush=True)
             if different_len < number_of_tasks:
                 raise ValueError(
                     f"'number_of_tasks' ({number_of_tasks}) is bigger than the length of the "
@@ -286,7 +280,6 @@ class ManagerAllocator:
                 # ARGs
                 first_args_index = sum(args_per_task[:first_index])
                 last_args_index = sum(args_per_task[:last_index + 1]) - 1
-                # print(f"first_args_index: {first_args_index}, last_args_index: {last_args_index}", flush=True)
 
                 # SUBMIT to stack(s)
                 self._stacks[stack_index].stack.put(
@@ -317,7 +310,6 @@ class ManagerAllocator:
         self.count.sorters.plus()
         self.count.list.add(total_tasks=number_of_tasks)
         self.count.dict.set(key=group_id, total_tasks=number_of_tasks)
-        print('second layer done', flush=True)
         return identifier
 
     def get(self) -> TaskValue:

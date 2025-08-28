@@ -124,9 +124,8 @@ class Stack:
                 each task should get a slice of items from each list or just a unique item.
                 Defaults to False.
         """
-        print(f"inside stack put", flush=True)
+
         self._lock.acquire()
-        print(f"lock acquired", flush=True)
         nb_of_tasks = last_task_index - first_task_index + 1
         # KWARGS generator
         generator = self._input_generator(
@@ -142,7 +141,6 @@ class Stack:
             last_index=last_task_index,
         )
 
-        print(f"generators created", flush=True)
         # ADD tasks to waiting list
         self._list.append((
             index_generator,
@@ -153,9 +151,7 @@ class Stack:
             generator,
             results,
         ))
-        print("list appended", flush=True)
         self._lock.release()
-        print("value added to stack", flush=True)
 
     def get(self) -> TaskValue:
         """

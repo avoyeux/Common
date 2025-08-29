@@ -6,7 +6,7 @@ independently of how nested the multiprocessing is and how many tasks you want t
 from __future__ import annotations
 
 # IMPORTs standard
-from itertools import count
+import gc
 import time
 
 # IMPORTs alias
@@ -332,7 +332,9 @@ class ProcessCoordinator:
                 output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
             finally:
                 # PROCESS output
-                if result: process_coordinator.manager.sort(identifier=fetch.identifier, data=output)
+                if result:
+                    process_coordinator.manager.sort(identifier=fetch.identifier, data=output)
+                gc.collect()
         count.close()
 
     @staticmethod
@@ -401,8 +403,8 @@ class ProcessCoordinator:
             output = f"\033[1;31mException: {type(e).__name__}: {e}\033[0m"
         finally:
             # PROCESS output
-            if result:
-                self.manager.sort(identifier=fetch.identifier, data=output)
+            if result: self.manager.sort(identifier=fetch.identifier, data=output)
+            gc.collect() # ! there is a memory leak so trying this
             return False
 
     def _manager_numbers(self, managers: int | tuple[int, int]) -> tuple[int, int]:

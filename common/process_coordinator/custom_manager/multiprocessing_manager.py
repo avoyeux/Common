@@ -4,6 +4,7 @@ Custom manager.
 from __future__ import annotations
 
 # IMPORTs standard
+import gc
 import time
 import threading
 
@@ -203,6 +204,7 @@ class Stack:
             function=function,
             kwargs=kwargs,
         )
+        gc.collect()
         return fetch_info, results
     
     def _index_generator(
@@ -364,6 +366,7 @@ class Results:
 
         # GET results
         same_results = self._all_results.get(identifier)
+        gc.collect()
         return [(task.identifier.index, task.data) for task in same_results.data]
     
     def full(self, identifier: TaskIdentifier) -> bool:

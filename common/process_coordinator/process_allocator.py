@@ -309,7 +309,7 @@ class ProcessCoordinator:
             if check: fetch = process_coordinator.manager.get() # input ready
 
             # COUNT tasks
-            count.stacks.plus()  # * acts as a lock.release()
+            process_coordinator.count.stacks.plus()  # * acts as a lock.release()
             if check is None:
                 print(
                     f"\033[1;31mExiting a worker\033[0m",
@@ -335,7 +335,7 @@ class ProcessCoordinator:
                 if result:
                     process_coordinator.manager.sort(identifier=fetch.identifier, data=output)
                 gc.collect()
-        count.close()
+        process_coordinator.count.close()
 
     @staticmethod
     def _repopulate_self(
@@ -404,7 +404,6 @@ class ProcessCoordinator:
         finally:
             # PROCESS output
             if result: self.manager.sort(identifier=fetch.identifier, data=output)
-            gc.collect() # ! there is a memory leak so trying this
             return False
 
     def _manager_numbers(self, managers: int | tuple[int, int]) -> tuple[int, int]:

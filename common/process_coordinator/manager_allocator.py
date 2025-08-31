@@ -218,10 +218,8 @@ class ManagerAllocator:
         if self._verbose > 0: print(f"ID: {group_id} tasks: {number_of_tasks}", flush=self._flush)
 
         # CHECK kwargs
-        if (
-            (not different_kwargs) or 
-            ((different_len := len(next(iter(different_kwargs.values())))) == number_of_tasks)
-            ):
+        different_len = len(next(iter(different_kwargs.values()))) if different_kwargs else 0
+        if (not different_kwargs) or (different_len == number_of_tasks):
             valid_values = IndexAllocator.valid_indexes(
                 number_of_tasks=number_of_tasks,
                 nb_of_queues=self._manager_nb[0],

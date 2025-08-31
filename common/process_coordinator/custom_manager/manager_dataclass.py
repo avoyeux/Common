@@ -48,7 +48,6 @@ class FetchInfo:
         for slot, value in state.items(): setattr(self, slot, value)
 
 
-
 @dataclass(slots=True, eq=False, repr=False, match_args=False)
 class TaskIdentifier:
     """
@@ -228,10 +227,6 @@ class AllResults:
                     self.data.pop(i)
                     self._lock.release()
                     return same_result
-
-            # # WAIT
-            # self._lock.release()
-            # time.sleep(1)  # ? add it as a parameter ?
 
     def results_full(self, identifier: TaskIdentifier) -> bool:
         """

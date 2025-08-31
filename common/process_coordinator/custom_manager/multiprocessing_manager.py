@@ -167,27 +167,17 @@ class Stack:
 
         self._lock.acquire()
         while True:
-            try:
-                (
-                    index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
-                    results,
-                ) = self._list[-1]
-            except Exception as e:
-                print("\033[1;75mFailed to get the value\033[0m")
-                print(e, flush=True)
-                raise e
+            (
+                index_generator, group_tasks, total_tasks, group_id, function, kwargs_generator,
+                results,
+            ) = self._list[-1]
 
-            try:
-                # CHECK generator
-                index = next(index_generator)
-                if index is not None: break
+            # CHECK generator
+            index = next(index_generator)
+            if index is not None: break
 
-                # POP finished tasks
-                self._list.pop()
-            except Exception as e:
-                print("\033[1;75mFailed to next and pop\033[0m")
-                print(e, flush=True)
-                raise e
+            # POP finished tasks
+            self._list.pop()
         
         # GET kwargs
         kwargs = next(kwargs_generator)
@@ -204,7 +194,6 @@ class Stack:
             function=function,
             kwargs=kwargs,
         )
-        gc.collect()
         return fetch_info, results
     
     def _index_generator(
@@ -366,7 +355,6 @@ class Results:
 
         # GET results
         same_results = self._all_results.get(identifier)
-        gc.collect()
         return [(task.identifier.index, task.data) for task in same_results.data]
     
     def full(self, identifier: TaskIdentifier) -> bool:

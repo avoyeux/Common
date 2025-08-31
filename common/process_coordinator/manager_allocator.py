@@ -322,19 +322,11 @@ class ManagerAllocator:
         """
 
         # COUNT
-        value = self.count.stacks.minus()
-
-        # SPECIAL CASE where timing is off as manager is still not ready
-        # if value == -1: time.sleep(0.05)  # -1 (not 0) as value is offset by 1 to act as a lock
+        self.count.stacks.minus()
 
         # STACK choose
         stack_index = self.count.list.next()
-        try:
-            result = self._stacks[stack_index].stack.get()
-        except Exception as e:
-            print(f"Failed for index {stack_index}")
-            print(e, flush=True)
-            raise e
+        result = self._stacks[stack_index].stack.get()
         return result
 
     def sort(self, identifier: TaskIdentifier, data: Any) -> None:

@@ -1,6 +1,7 @@
 """
 To store some functions that can be useful when working with YAML files.
 """
+from __future__ import annotations
 
 # IMPORTs
 import os
@@ -52,7 +53,6 @@ class DictToObjClass:
         Returns:
             Any: check the protocol class DictToObj.
         """
-
         raise AttributeError(f"'{self.__class__.__name__}' object has no attribute '{name}'")
 
 
@@ -75,12 +75,26 @@ class ConfigToObject:
             filepath = config_path
         else:
             filepath = os.path.join(root_path, "config.yml")
-        config = self.get_config(filepath)
+        config = self._get_config(filepath)
+
+        # CREATE directories
+        self._create_dirs(config)
 
         # OBJECT from dict
         self._config: DictToObj = DictToObjClass(config)
 
-    def join_constructor(
+    @property
+    def config(self) -> DictToObj:
+        """
+        The paths inside the config.yml file saved inside a class.
+        Each instance attribute will be one of the keys inside the YAML file.
+
+        Returns:
+            DictToObj: class where the keys of the YAML file set as attribute names. 
+        """
+        return self._config
+
+    def _join_constructor(
             self,
             loader: yaml.loader.SafeLoader,
             node: yaml.nodes.SequenceNode,
@@ -99,8 +113,8 @@ class ConfigToObject:
         str_list = loader.construct_sequence(node)
         str_list = [value if isinstance(value, str) else "" for value in str_list]
         return os.path.join(*str_list)
-    
-    def rootpath_constructor(
+
+    def _rootpath_constructor(
             self,
             loader: yaml.loader.SafeLoader,
             node: yaml.nodes.ScalarNode,
@@ -115,10 +129,9 @@ class ConfigToObject:
         Returns:
             str: the root_path value.
         """
-
         return root_path
 
-    def get_config(self, filepath: str) -> dict[str, Any]:
+    def _get_config(self, filepath: str) -> dict[str, Any]:
         """
         To get the config file information.
 
@@ -130,13 +143,79 @@ class ConfigToObject:
         """
 
         # CONSTRUCTOR add
-        yaml.SafeLoader.add_constructor("!join", self.join_constructor)
-        yaml.SafeLoader.add_constructor("!rootpath", self.rootpath_constructor)
+        yaml.SafeLoader.add_constructor("!join", self._join_constructor)
+        yaml.SafeLoader.add_constructor("!rootpath", self._rootpath_constructor)
 
         with open(filepath, 'r') as conf: config = yaml.load(conf, Loader=yaml.SafeLoader)
         return config
 
-    @property
-    def config(self) -> DictToObj: return self._config
+    def _is_a_dir(self, path: str) -> bool:
+        """
+        To check if the strings gotten from the YAML file is a directory path or not.
+
+        Args:
+            path (str): the string to check.
+
+        Returns:
+            bool: True if the given string is a directory path, False otherwise.
+        """
+
+        # CHECK empty
+        if not isinstance(path, str) or path.strip() == "": return False
+
+        # CHECK common paths
+        if not any([os.path.sep in path, path.startswith('.'), path.startswith('~')]): return False
+        if path.endswith(os.path.sep) or path.endswith('/'): return True
+
+        expand = os.path.expanduser(path)
+        normalized = os.path.normpath(expand)
+        last = os.path.basename(normalized)
+        if last == '': return True
+
+        # CHECK if extension
+        root, ext = os.path.splitext(last)
+        if ext == '': return True
+
+        # ELSE
+        return False
+
+    def _create_dirs(self, mapping: dict[str, Any]) -> None:
+        """
+        Creates directories when a value inside the YAML file represents a directory path.
+        Doesn't crush the directory if it already exists.
+
+        Args:
+            mapping (dict[str, Any]): _description_
+        """
+
+        def _walk(value: Any) -> None:
+            """
+            To walk through the YAML file values and create the path if it is a directory.
+            The directory is not created if it already exists.
+
+            Args:
+                value (Any): the current value to check.
+            """
+            # RECURSIVE walk
+            if isinstance(value, dict):
+                for v in value.values(): _walk(v)
+            # CHECK string
+            elif isinstance(value, str):
+                if self._is_a_dir(value):
+                    dirpath = os.path.expanduser(value)
+                    try:
+                        os.makedirs(dirpath, exist_ok=True)
+                    except OSError:
+                        print(
+                            "\033[93mWarning: In config not create directory at path: "
+                            f"{dirpath}\033[0m",
+                            flush=True,
+                        )
+                        return
+            else: return
+
+        # RUN
+        _walk(mapping)
+
 
 config = ConfigToObject().config if os.path.exists(os.path.join(root_path, "config.yml")) else None

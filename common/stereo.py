@@ -2,6 +2,7 @@
 """
 Stores some functions that are specific for STEREO data accessing.
 """
+from __future__ import annotations
 
 # IMPORTs
 import os

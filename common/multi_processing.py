@@ -2,6 +2,7 @@
 """
 Has functions that help me when multiprocessing.
 """
+from __future__ import annotations
 
 # IMPORTs alias
 import numpy as np

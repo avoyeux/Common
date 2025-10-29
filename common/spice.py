@@ -9,6 +9,7 @@ Common repository I have created.
 
 Dr. Pelouze's github can be found here: https://github.com/gpelouze
 """
+from __future__ import annotations
 
 # IMPORTS
 import re

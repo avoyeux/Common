@@ -2,6 +2,7 @@
 """
 To store functions related to the ias server connection.
 """
+from __future__ import annotations
 
 # IMPORTS
 import os

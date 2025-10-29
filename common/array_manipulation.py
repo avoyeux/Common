@@ -2,6 +2,7 @@
 """
 Has functions that help me manipulate arrays (e.g. resizing an image with a resampling method).
 """
+from __future__ import annotations
 
 # IMPORTs alias
 import numpy as np

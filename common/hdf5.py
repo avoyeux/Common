@@ -3,6 +3,7 @@
 To help when using the HDF5 format. Initially created to have a similar option than the .info() in
 FITS files.
 """
+from __future__ import annotations
 
 # IMPORTS
 import os

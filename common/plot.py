@@ -2,6 +2,7 @@
 """
 For functions that are related to plotting data
 """
+from __future__ import annotations
 
 # IMPORTs
 import scipy

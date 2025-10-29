@@ -2,6 +2,7 @@
 """
 Has decorators that I regularly use.
 """
+from __future__ import annotations
 
 # IMPORTs
 import inspect

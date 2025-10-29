@@ -1,6 +1,7 @@
 """
 Defaults functions for creating and checking the path.
 """
+from __future__ import annotations
 
 # IMPORTs
 import os

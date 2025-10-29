@@ -1,6 +1,7 @@
 """
 Has functions to help with pandas operations.
 """
+from __future__ import annotations
 
 # TYPE ANNOTATIONs
 from typing import TypeVar

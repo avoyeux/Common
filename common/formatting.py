@@ -1,6 +1,7 @@
 """
 To store function used for common formatting tasks.
 """
+from __future__ import annotations
 
 # IMPORTs
 import re

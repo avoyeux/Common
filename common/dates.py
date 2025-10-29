@@ -1,6 +1,7 @@
 """
 To store code related to date formatting.
 """
+from __future__ import annotations
 
 # API public
 __all__ = ["CustomDate", "DatesUtils"]

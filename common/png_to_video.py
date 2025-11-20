@@ -38,6 +38,7 @@ class PngToVideo:
             png_pattern: str = "frame_%05d.png",
             pix_fmt: PixFmt = "yuv420p",
             png_catalogue: str | None = None,
+            threads: int | None = None,
             extra_args: list[str] | None = None,
         ) -> None:
         """
@@ -59,6 +60,8 @@ class PngToVideo:
             pix_fmt (str, optional): pixel format of the output video. Defaults to "yuv420p".
             png_catalogue (str | None, optional): catalogue filename listing the ordered input PNG
                 files. If provided,'png_pattern' is ignored. Defaults to None.
+            threads (int | None, optional): number of threads to use for ffmpeg. If None, ffmpeg
+                decides automatically. Same if 0. Defaults to None.
             extra_args (list[str] | None, optional): extra arguments to pass to ffmpeg command.
                 Defaults to None.
         """
@@ -69,6 +72,7 @@ class PngToVideo:
         self._codec = codec
         self._png_dir = png_dir
         self._pix_fmt = pix_fmt
+        self._threads = threads
         self._video_name = video_name
         self._output_dir = output_dir
         self._extra_args = extra_args if extra_args is not None else []
@@ -132,16 +136,23 @@ class PngToVideo:
                 '-i', os.path.join(self._png_dir, self._png_pattern),
             ]
 
-        # END cmd
         cmd += [
             '-c:v', f'{self._codec}',
             '-crf', str(self._crf),
             '-pix_fmt', f'{self._pix_fmt}',
+        ]
+
+        if self._threads is not None and self._threads >= 0:
+            cmd += ['-threads', str(self._threads)]
+        
+        # END cmd
+        cmd += [
             *self._extra_args,
             '-y',  # Overwrite output file
             os.path.join(self._output_dir, self._video_name),
         ]
 
+        # RUN
         try:
             subprocess.run(cmd, check=True, capture_output=True)
             print(f"Video created: {os.path.join(self._output_dir, self._video_name)}")

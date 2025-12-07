@@ -11,9 +11,13 @@ import subprocess
 # TYPE ANNOTATIONs
 from typing import Literal
 type Codec = Literal[
-    "libx264", "libx265", "mpeg4", "libvpx-vp9", "h264_nvenc", "hevc_nvenc", "libxvid", "prores_ks"
+    "libx264", "libx265", "mpeg4", "libvpx-vp9", "h264_nvenc", "hevc_nvenc", "libxvid",
+    "prores_ks",
 ]
 type PixFmt = Literal["yuv420p","yuv422p","yuv444p","rgba"]
+type Preset = Literal[
+    'ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow',
+]
 
 # API public
 __all__ = ['PngToVideo']
@@ -37,6 +41,7 @@ class PngToVideo:
             crf: int = 18,
             png_pattern: str = "frame_%05d.png",
             pix_fmt: PixFmt = "yuv420p",
+            preset: Preset = 'slower',
             png_catalogue: str | None = None,
             threads: int | None = None,
             extra_args: list[str] | None = None,
@@ -58,6 +63,8 @@ class PngToVideo:
                 'png_catalogue' is provided, this parameter is ignored.
                 Defaults to "frame_%05d.png".
             pix_fmt (str, optional): pixel format of the output video. Defaults to "yuv420p".
+            preset (Preset, optional): encoding speed/quality trade-off. Slower presets give better
+                compression (quality per filesize). Defaults to 'slower'.
             png_catalogue (str | None, optional): catalogue filename listing the ordered input PNG
                 files. If provided,'png_pattern' is ignored. Defaults to None.
             threads (int | None, optional): number of threads to use for ffmpeg. If None, ffmpeg
@@ -70,6 +77,7 @@ class PngToVideo:
         self._crf = crf
         self._fps = fps
         self._codec = codec
+        self._preset = preset
         self._png_dir = png_dir
         self._pix_fmt = pix_fmt
         self._threads = threads
@@ -137,9 +145,10 @@ class PngToVideo:
             ]
 
         cmd += [
-            '-c:v', f'{self._codec}',
+            '-c:v', self._codec,
+            '-preset', self._preset,
             '-crf', str(self._crf),
-            '-pix_fmt', f'{self._pix_fmt}',
+            '-pix_fmt', self._pix_fmt,
         ]
 
         if self._threads is not None and self._threads >= 0:
@@ -167,7 +176,7 @@ if __name__ == '__main__':
         png_dir='/home/voyeux-alfred/Documents/work_codes/SOHO_30years_video/results/png',
         output_dir='/home/voyeux-alfred/Documents/work_codes/SOHO_30years_video/results/',
         fps=24,
-        codec='libx264',
+        codec='libx265',
         crf=20,
         png_pattern='frame_%05d.png',
         pix_fmt='yuv420p',

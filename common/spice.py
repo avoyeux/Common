@@ -54,7 +54,8 @@ class SpiceUtils:
         _(?P<SPIOBSID>\d+)-(?P<RASTERNO>\d+)
         \.fits
         """,
-        re.VERBOSE)
+        re.VERBOSE,
+    )
 
     @staticmethod
     def read_spice_uio_catalog(verbose: int = 0, flush: bool = False) -> pd.DataFrame:
@@ -89,7 +90,7 @@ class SpiceUtils:
 
         # Setup
         main_path = os.path.join('/archive', 'SOLAR-ORBITER', 'SPICE')
-        catalogue_filepath = os.path.join(main_path, 'fits', 'spice_catalog.csv')
+        catalogue_filepath = os.path.join(main_path, 'fits', 'spice_catalog2.csv')
         date_columns = ['DATE-BEG', 'DATE', 'TIMAQUTC']
 
         # Finding the file
@@ -101,7 +102,7 @@ class SpiceUtils:
                 parse_dates=date_columns,
             )
         else:
-            if verbose > 1:
+            if verbose > 0:
                 print(
                     "\033[37mCouldn't find the SPICE archive. Connecting to the server ...\033[0m",
                     flush=flush,
@@ -117,7 +118,7 @@ class SpiceUtils:
             )
 
             # Cleanup temporary folder
-            SSHMirroredFilesystem.cleanup(which='sameIDLatest')
+            SSHMirroredFilesystem.cleanup(which='sameIDLatest', verbose=verbose - 1, flush=flush)
 
         # Striping the useless spaces
         df.LEVEL = df.LEVEL.apply(

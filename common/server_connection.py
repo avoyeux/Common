@@ -369,7 +369,7 @@ class SSHMirroredFilesystem:
         return cast(StrOrListType, local_filepaths)
   
     @staticmethod
-    def cleanup(which: str = 'all', verbose: int = 0) -> None:
+    def cleanup(which: str = 'all', verbose: int = 0, flush: bool = False) -> None:
         """
         Used to clean up the temporary filesystem.
 
@@ -389,6 +389,7 @@ class SSHMirroredFilesystem:
                 Defaults to 'all'.
             verbose (int, optional): if > 0, then some information prints are created.
                 Defaults to 0.
+            flush (bool, optional): whether to flush the prints. Defaults to False.
         """
 
         # OPTION CHECK
@@ -444,7 +445,8 @@ class SSHMirroredFilesystem:
 
                 if verbose > 0:
                     print(
-                        f"\033[37mCleanup: temporary filesystem {directory_path} removed.\033[0m"
+                        f"\033[37mCleanup: temporary filesystem {directory_path} removed.\033[0m",
+                        flush=flush,
                     )
             else:
                 # Remove the directories list
@@ -454,12 +456,14 @@ class SSHMirroredFilesystem:
                 if verbose > 0:
                     print(
                         f"\033[37mCleanup: temporary subfolder(s) {', '.join(directories)} "
-                        f"removed from folder {directory_path}.\033[0m"
+                        f"removed from folder {directory_path}.\033[0m",
+                        flush=flush,
                     )
 
         elif verbose > 0:
             print(
-                f"\033[37mCleanup: temporary filesystem {directory_path} already removed.\033[0m"
+                f"\033[37mCleanup: temporary filesystem {directory_path} already removed.\033[0m",
+                flush=flush,
             )
 
     @staticmethod

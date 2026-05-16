@@ -51,7 +51,9 @@ class SpiceUtils:
             (?P<int>-int)?
         _(?P<time>\d{8}T\d{6})
         _(?P<version>V\d{2})
-        _(?P<SPIOBSID>\d+)-(?P<RASTERNO>\d+)
+        _(?P<SPIOBSID>\d+)
+        -(?P<RASTERNO>\d+)
+        (?P<DR>-DR\d+)?
         \.fits
         """,
         re.VERBOSE,
@@ -90,7 +92,7 @@ class SpiceUtils:
 
         # Setup
         main_path = os.path.join('/archive', 'SOLAR-ORBITER', 'SPICE')
-        catalogue_filepath = os.path.join(main_path, 'fits', 'spice_catalog2.csv')
+        catalogue_filepath = os.path.join(main_path, 'fits', 'spice_catalog.csv')
         date_columns = ['DATE-BEG', 'DATE', 'TIMAQUTC']
 
         # Finding the file

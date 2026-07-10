@@ -11,22 +11,19 @@ Dr. Pelouze's github can be found here: https://github.com/gpelouze
 """
 from __future__ import annotations
 
-# IMPORTS
+# IMPORTs standard
 import re
 import os
 
-# IMPORTs alias
+# IMPORTs third-party
 import pandas as pd
-
-# IMPORTs sub
 from dateutil.parser import parse as parse_date
 
 # IMPORTs personal
 from .server_connection import SSHMirroredFilesystem
 
 # TYPE ANNOTATIONs
-from typing import cast, TypeVar
-StrOrListAlias = TypeVar('StrOrListAlias', bound=str | list[str])
+from typing import cast
 
 # API public
 __all__ = ["SpiceUtils", "get_mosaic_filenames"]
@@ -151,7 +148,7 @@ class SpiceUtils:
         return m.groupdict()
 
     @staticmethod
-    def ias_fullpath(filenames: StrOrListAlias) -> StrOrListAlias:
+    def ias_fullpath[StrOrListAlias: str | list[str]](filenames: StrOrListAlias) -> StrOrListAlias:
         """
         Gives the server fullpath to a SPICE FITS file given it's filename(s).
 
@@ -160,7 +157,8 @@ class SpiceUtils:
 
         Returns:
             str | list[str]: the server (or local if the idc-archive remote drive is set up)
-                fullpath to the corresponding SPICE FITS file(s).
+                fullpath to the corresponding SPICE FITS file(s). The return type is the same than
+                the input.
         """
 
         # Initial type conversion

@@ -1,6 +1,10 @@
 """
 Has a class that helps partition tasks across multiple queues.
 """
+from __future__ import annotations
+
+# API public
+__all__ = ['IndexAllocator']
 
 
 

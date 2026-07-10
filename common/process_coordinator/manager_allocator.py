@@ -150,7 +150,7 @@ class ManagerAllocator:
             "_flush": self._flush,
         }
         return state
-    
+
     def __setstate__(self, state: dict[str, Any]) -> None: self.__dict__.update(state)
 
     @overload

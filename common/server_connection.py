@@ -4,19 +4,16 @@ To store functions related to the ias server connection.
 """
 from __future__ import annotations
 
-# IMPORTS
+# IMPORTs standard
 import os
 import time
 import shutil
 import tempfile
 import subprocess
-
-# IMPORTS alias
 import multiprocessing as mp
 
 # TYPE ANNOTATIONs
-from typing import cast, TypeVar, Any
-StrOrListType = TypeVar('StrOrListType', bound=str | list[str])
+from typing import cast, Any
 type ManagerAlias = Any
 type SemaphoreAlias = Any
 
@@ -173,7 +170,7 @@ class SSHMirroredFilesystem:
 
             # ERRORs bash
             if process.poll() is not None:  # i.e. process finished
-                error_message = process.stderr.read().decode()
+                error_message = process.stderr.read().decode() #type:ignore
                 if error_message:
                     raise Exception(
                         f'\033[1;31mSSH connection failed. Error: {error_message.strip()}\033[0m'
@@ -181,7 +178,11 @@ class SSHMirroredFilesystem:
             time.sleep(0.1)
         return False
 
-    def mirror(self, remote_filepaths: StrOrListType, strip_level: int = 2) -> StrOrListType:
+    def mirror[StrOrListType: str | list[str]](
+            self,
+            remote_filepaths: StrOrListType,
+            strip_level: int = 2,
+        ) -> StrOrListType:
         """
         Given server filepath(s), it returns the corresponding filepath(s) to the file(s) now in
         the local temporary folder. The filename order remains the same than the inputted one.
@@ -246,7 +247,7 @@ class SSHMirroredFilesystem:
         # Local filepath setup 
         length = len(remote_filepaths)
         local_filepaths = [
-            os.path.join(folder_path, self._strip(remote_filepaths[i], strip_level))
+            os.path.join(folder_path, self._strip(remote_filepaths[i], strip_level)) #type:ignore
             for i in range(length)
         ]
         if length == 1: return cast(StrOrListType, local_filepaths[0])
@@ -295,7 +296,7 @@ class SSHMirroredFilesystem:
             cls._semaphore = None
 
     @staticmethod
-    def remote_to_local(
+    def remote_to_local[StrOrListType: str | list[str]](
             remote_filepaths: StrOrListType,
             host_shortcut: str = 'sol',
             compression: str = 'z',
@@ -361,13 +362,13 @@ class SSHMirroredFilesystem:
         local_filepaths = [
             os.path.join(
                 folder_path,
-                SSHMirroredFilesystem._strip(remote_filepaths[i], strip_level),
+                SSHMirroredFilesystem._strip(remote_filepaths[i], strip_level), #type:ignore
             )
             for i in range(length)
         ]
         if len(local_filepaths) == 1: return cast(StrOrListType, local_filepaths[0])
         return cast(StrOrListType, local_filepaths)
-  
+
     @staticmethod
     def cleanup(which: str = 'all', verbose: int = 0, flush: bool = False) -> None:
         """
@@ -494,7 +495,7 @@ class SSHMirroredFilesystem:
         # Append the new name to the directory list
         SSHMirroredFilesystem._append(foldername)
         return folder_path
-   
+
     @staticmethod
     def _to_date(timestamp: float) -> str:
         """
@@ -512,7 +513,7 @@ class SSHMirroredFilesystem:
         date_part = time.strftime('%Y%m%d_%H%M%S', time.localtime(int(timestamp)))
         microseconds = int((timestamp % 1) * 1e6)
         return f"{date_part}_{microseconds:06d}"
-    
+
     @staticmethod
     def _to_timestamp(date_str : str) -> float:
         """
@@ -551,7 +552,7 @@ class SSHMirroredFilesystem:
             with cls.mp_lock: cls.directory_list.append(foldername)
         else:
             cls.directory_list.append(foldername)
-    
+
     @classmethod
     def _pop(cls, directories: list[str] = []) -> None:
         """
@@ -587,7 +588,7 @@ class SSHMirroredFilesystem:
         # Strip
         path_stripped = parts[strip_level:] if len(parts) > strip_level else [parts[-1]]
         return os.path.join(*path_stripped)
-    
+
     @classmethod
     def _recreate_filesystem(cls) -> None:
         """

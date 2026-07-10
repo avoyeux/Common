@@ -4,15 +4,13 @@ Has decorators that I regularly use.
 """
 from __future__ import annotations
 
-# IMPORTs
+# IMPORTs standard
 import inspect
 import functools
-
-# IMPORTs alias
-import numpy as np
-
-# IMPORTs sub
 from time import time, ctime
+
+# IMPORTs third-party
+import numpy as np
 from typeguard import typechecked
 
 # IMPORTs personal
@@ -21,7 +19,7 @@ from .formatting import StringFormatter
 # TYPE ANNOTATIONs
 from typing import Any, cast, Type, Callable, TypeVar, overload, Literal
 F = TypeVar('F', bound=Callable[..., Any])
-D = Callable[[F], any]
+D = Callable[[F], Any]
 T = TypeVar('T', bound=Type)
 
 # PUBLIC API

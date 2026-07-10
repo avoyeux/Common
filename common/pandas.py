@@ -4,8 +4,7 @@ Has functions to help with pandas operations.
 from __future__ import annotations
 
 # TYPE ANNOTATIONs
-from typing import TypeVar
-T = TypeVar('T')
+from typing import Any
 
 # API public
 __all__ = ["Pandas"]
@@ -18,7 +17,7 @@ class Pandas:
     """
     
     @staticmethod
-    def safe_round(
+    def safe_round[T: Any](
             x: T,
             decimals: int = 0,
             try_convert_string: bool = False,
@@ -47,7 +46,7 @@ class Pandas:
 
         try:
             if try_convert_string: x = float(x)  #type:ignore
-            return round(x, decimals)  #type:ignore
+            return round(x, decimals)
         except Exception as e:
             if verbose > 0:
                 print(

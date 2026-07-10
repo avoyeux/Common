@@ -4,10 +4,8 @@ Has functions that help me manipulate arrays (e.g. resizing an image with a resa
 """
 from __future__ import annotations
 
-# IMPORTs alias
+# IMPORTs third-party
 import numpy as np
-
-# IMPORTs sub
 from PIL import Image
 
 # API public
@@ -28,7 +26,7 @@ class ArrayManipulation:
         ) -> np.ndarray | Image.Image:
         """
         To Downsample and image using PIL with the high quality Lanczos method.
-        
+
         Args:
             array2D (np.ndarray): the np.ndarray to downsample
             downsampling_size (tuple[int, ...]): the downsampling size needed.
@@ -41,6 +39,6 @@ class ArrayManipulation:
 
         pil_array = Image.fromarray(array2D)
         pil_array = pil_array.resize(downsampling_size, Image.Resampling.LANCZOS)
-        
+
         if return_ndarray: return np.array(array2D)
         return array2D

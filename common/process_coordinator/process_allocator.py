@@ -9,7 +9,7 @@ from __future__ import annotations
 import gc
 import time
 
-# IMPORTs alias
+# IMPORTs third-party
 import multiprocessing as mp
 
 # IMPORTs local
@@ -21,7 +21,7 @@ from typing import Any, Self, Callable, overload, Literal, TYPE_CHECKING
 if TYPE_CHECKING: from .custom_manager import TaskIdentifier
 
 # API public
-all = ['ProcessCoordinator']
+__all__ = ['ProcessCoordinator']
 
 # todo need to add a more efficient method if no return value is needed
 # ! calling .give() is mandatory in the first submit_task call, otherwise one of the workers is
@@ -62,8 +62,8 @@ class ProcessCoordinator:
         ) -> None:
         """
         Initializes the ProcessCoordinator singleton with a set number of processes.
-        If ProcessCoordinator was already initialized, it will not reinitialise.
-        When initialised, it creates a set number of processes once and uses them to run tasks.
+        If ProcessCoordinator was already initialized, it will not reinitialize.
+        When initialized, it creates a set number of processes once and uses them to run tasks.
         Nested multiprocessing is supported and can be done just by calling the ProcessCoordinator
         class again (as it is a singleton). The given instance will be the 'same' as the main one.
         
@@ -154,7 +154,7 @@ class ProcessCoordinator:
         """
 
         # STOP processes
-        for p in self._processes: p.join()  # * cannot actually be None here.
+        for p in self._processes: p.join()  # * cannot actually be None here. #type:ignore
 
         # CLOSE manager
         self.manager.shutdown()
@@ -176,7 +176,7 @@ class ProcessCoordinator:
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
         ) -> TaskIdentifier: ...
-    
+
     @overload
     def submit_tasks(
             self,
@@ -186,7 +186,7 @@ class ProcessCoordinator:
             same_kwargs: dict[str, Any] = {},
             different_kwargs: dict[str, list[Any]] = {},
         ) -> None: ...
-    
+
     # FALLBACK
     @overload
     def submit_tasks(
@@ -454,7 +454,7 @@ if __name__ == "__main__":
                 different_kwargs={"y": [i for i in range(5)]},
                 results=True,
             )
-            
+
             # Wait for results
             results = coordinator.give(task_id)
             print(f"results for task {val}: {results}", flush=True)
@@ -479,7 +479,7 @@ if __name__ == "__main__":
                 function=main_worker,
                 different_kwargs={"x": [i for i in range(10)]},
             )
-            
+
             # Wait for results
             results = coordinator.give(task_id)
             print(f'Done indexes are: {[res[0][0] for sublist in results for res in sublist]}', flush=True)

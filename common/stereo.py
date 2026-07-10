@@ -4,23 +4,20 @@ Stores some functions that are specific for STEREO data accessing.
 """
 from __future__ import annotations
 
-# IMPORTs
+# IMPORTs standard
 import os
 import re
 
-# IMPORTs alias
+# IMPORTs third-party
 import numpy as np
 import pandas as pd
-
-# IMPORTs sub
 from astropy.io import fits
 
 # IMPORTs personal
 from .server_connection import SSHMirroredFilesystem
 
 # TYPE ANNOTATIONs
-from typing import cast, TypeVar
-StrOrListAlias = TypeVar('StrOrListAlias', bound=str | list[str])
+from typing import cast
 
 # API public
 __all__ = ["StereoUtils"]
@@ -28,25 +25,24 @@ __all__ = ["StereoUtils"]
 
 
 class StereoUtils:
-    """For opening, reading and filtering the STEREO catalogue. Most functions only work when on
-    the server.
-
-    Raises:
-        ValueError: _description_
-
-    Returns:
-        _type_: _description_
+    """
+    For opening, reading and filtering the STEREO catalogue. Most functions only work when on the
+    server.
     """
 
     # STEREO filename pattern and main paths.
-    stereo_filename_pattern = re.compile(r'''(?P<date>\d{8})_
-                                         (?P<ID>\d{6})_
-                                         (?P<type>n\d+eu[a-zA-Z]).fts
-                                         ''', re.VERBOSE)
+    stereo_filename_pattern = re.compile(
+        r'''
+        (?P<date>\d{8})_
+        (?P<ID>\d{6})_
+        (?P<type>n\d+eu[a-zA-Z]).fts
+        ''',
+        re.VERBOSE,
+    )
     file_directory_path = '/archive/science_data/stereo/lz/L0/b/img/euvi'  # directory STEREO FITS 
     flat_path = '/usr/local/ssw/stereo/secchi/calibration/20060823_wav171_fCeuB.fts'  # flat field
     catalogue_path = '/archive/science_data/stereo/lz/L0/b/summary/sccB201207.img.eu'  # STEREO cat
-    
+
     @staticmethod
     def read_catalogue(
             filter_compressed_data: bool = True,
@@ -95,7 +91,7 @@ class StereoUtils:
         return df.reset_index(drop=True)
 
     @staticmethod
-    def fullpath(filenames: StrOrListAlias | pd.Series) -> StrOrListAlias:
+    def fullpath[StrOrListAlias: str | list[str]](filenames: StrOrListAlias) -> StrOrListAlias:
         """
         Gives the fullpath to a stereo filename. 
 
@@ -109,10 +105,10 @@ class StereoUtils:
         Returns:
             str | list[str]: the fullpath of the given STEREO filenames.
         """
-        
+
         # Type changing
         if isinstance(filenames, str): filenames = cast(StrOrListAlias, [filenames])
-        
+
         len_filenames = len(filenames)
         list_fullpath = cast(list[str], [None] * len_filenames)
         for i, filename in enumerate(filenames):
@@ -123,7 +119,7 @@ class StereoUtils:
                 list_fullpath[i] = os.path.join(StereoUtils.file_directory_path, date, filename)
             else:
                 raise ValueError(f"STEREO filename did not match with: {filename}")    
-        
+
         if len_filenames == 1: return cast(StrOrListAlias, list_fullpath[0])
         return cast(StrOrListAlias, list_fullpath)
 
@@ -133,10 +129,10 @@ class StereoUtils:
             clip_percentages: tuple[int | float, int | float] = (1, 99.99),
             clip_nan: bool = True,
             log: bool = True,
-            log_lowercut: int = 1
+            log_lower_cut: int = 1
         ) -> np.ndarray:
         #TODO: need to check this function out as some stuff is useless.
-        
+
         if isinstance(filenames, str): 
             filenames = [filenames]
 
@@ -166,7 +162,7 @@ class StereoUtils:
         if clip_nan: images = np.where(np.isnan(images), lower_cut, images)
         images = images - means  # subtracting the bias
         if log: 
-            images[images < log_lowercut] = log_lowercut
+            images[images < log_lower_cut] = log_lower_cut
             images = np.log(images)
 
         if images.shape[0] == 1: return images[0]

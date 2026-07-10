@@ -5,16 +5,18 @@ FITS files.
 """
 from __future__ import annotations
 
-# IMPORTS
+# IMPORTs standard
 import os
-import h5py
 import shutil
 
-# IMPORTS sub
-from typing import Self
+# IMPORTs third-party
+import h5py
 
 # IMPORTS personal
 from .formatting import StringFormatter
+
+# TYPE ANNOTATIONs
+from typing import Self
 
 # API public
 __all__ = ['HDF5Handler']
@@ -84,13 +86,13 @@ class HDF5Handler:
 
         except Exception as e:
             raise Exception(
-                f"\033[1;31m'{os.path.basename(filepath)}' not recognised as and HDF5 file.\n"
+                f"\033[1;31m'{os.path.basename(filepath)}' not recognized as and HDF5 file.\n"
                 f"Error: {e}\033[0m"
             )
-     
+
         filename = os.path.basename(filepath)
         return cls(filename, h5File, verbose, flush)
-    
+
     def info(
             self,
             level: int = 10,
@@ -183,7 +185,7 @@ class HDF5Handler:
         # VISIT file
         self.file.visititems(find_path)
         return found_paths
-    
+
     def close(self) -> None:
         """
         To close the file. From what I was told, it is especially important for HDF5 files.
@@ -367,7 +369,7 @@ class HDF5PrintInformation:
                         rank=rank,
                     )
                 ]
-            
+
             # CHECK type
             if isinstance(item, h5py.Dataset):
                 info_datasets.extend(
@@ -402,7 +404,7 @@ class HDF5PrintInformation:
             indentation + "-" * (self.max_width - len(self.indentation) * rank)
         ]
         return print_list
-    
+
     def _define_dataset(self, dataset: h5py.Dataset, dataset_name: str, dataset_nb: int) -> str:
         """
         To define the string to print for a given dataset.
@@ -435,7 +437,7 @@ class HDF5PrintInformation:
                 string += f"compression: None, "
             else:
                 string += f"compression(lvl{compression_lvl}): {compression}, "
-            
+
         if self.disk_size:
             string += (
                 f"disk size: {self.formatter.nbytes_to_human(dataset.id.get_storage_size())}, "

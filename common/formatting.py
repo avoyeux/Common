@@ -3,7 +3,7 @@ To store function used for common formatting tasks.
 """
 from __future__ import annotations
 
-# IMPORTs
+# IMPORTs standard
 import re
 
 # API public
@@ -66,8 +66,8 @@ class StringFormatter:
                 list. Defaults to 0.
 
         Returns:
-            list[str]: the list of reformatted strings with each having a maximum visualised length
-                (i.e. when printed on a terminal that recognises ANSI code). When printing the 
+            list[str]: the list of reformatted strings with each having a maximum visualized length
+                (i.e. when printed on a terminal that recognizes ANSI code). When printing the 
                 strings, there should be a linebreak between each list elements.
         """
 

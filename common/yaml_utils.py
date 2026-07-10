@@ -3,8 +3,10 @@ To store some functions that can be useful when working with YAML files.
 """
 from __future__ import annotations
 
-# IMPORTs
+# IMPORTs standard
 import os
+
+# IMPORTs third-party
 import yaml
 
 # IMPORTs personal

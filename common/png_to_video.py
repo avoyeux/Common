@@ -167,19 +167,3 @@ class PngToVideo:
             print(f"Video created: {os.path.join(self._output_dir, self._video_name)}")
         except subprocess.CalledProcessError as e:
             print(f"FFmpeg error: {e.stderr.decode()}")
-
-
-
-if __name__ == '__main__':
-    PngToVideo(
-        video_name='test_video.mp4',
-        png_dir='/home/voyeux-alfred/Documents/work_codes/SOHO_30years_video/results/png',
-        output_dir='/home/voyeux-alfred/Documents/work_codes/SOHO_30years_video/results/',
-        fps=24,
-        codec='libx265',
-        crf=20,
-        png_pattern='frame_%05d.png',
-        pix_fmt='yuv420p',
-        png_catalogue=None,
-        # extra_args=['-preset', 'fast'],
-    )

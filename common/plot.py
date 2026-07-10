@@ -4,14 +4,10 @@ For functions that are related to plotting data
 """
 from __future__ import annotations
 
-# IMPORTs
+# IMPORTs third-party
 import scipy
-
-# IMPORTs alias
-import numpy as np
-
-# IMPORTs sub
 import scipy.interpolate
+import numpy as np
 import matplotlib.pyplot as plt
 
 # TYPE ANNOTATIONs
@@ -61,7 +57,7 @@ class Plot:
 
         Returns:
             typing.Generator[int, None, None]: A generator that yields random integers representing
-                colours in hexadecimal format.
+                colors in hexadecimal format.
 
         Yields:
             int: A random integer representing a color in hexadecimal format (in the range
@@ -71,9 +67,9 @@ class Plot:
         while True: yield np.random.randint(0, 0xffffff)
 
     @staticmethod
-    def different_colours(omit: list[str] = ['white']) -> Generator[str, None, None]:
+    def different_colors(omit: list[str] = ['white']) -> Generator[str, None, None]:
         """
-        To get plot colours that are really different.
+        To get plot colors that are really different.
 
         Args:
             omit (list[str], optional): the colour(s) to omit.
@@ -82,7 +78,7 @@ class Plot:
             typing.Generator[str, None, None]: the colour name
         """
 
-        colours = [
+        colors = [
             'white',
             'blue',
             'red',
@@ -99,8 +95,8 @@ class Plot:
             'silver',
             'gold',
         ]
-        colours = [c for c in colours if c not in omit]
-        for c in colours: yield c
+        colors = [c for c in colors if c not in omit]
+        for c in colors: yield c
 
 
 class AnnotateAlongCurve:
@@ -131,7 +127,7 @@ class AnnotateAlongCurve:
         self.gradient_dx = 5  # ? no clue in what unit it is
 
         # RUN
-        self.x_interp, self.y_interp = self.curve_interpolation()
+        self.x_interpolated, self.y_interpolated = self.curve_interpolation()
         self.annotate()
     
     def curve_interpolation(self) -> tuple[scipy.interpolate.interp1d, scipy.interpolate.interp1d]:
@@ -158,17 +154,17 @@ class AnnotateAlongCurve:
         for pos in positions:
 
             # COORDs annotation
-            x = self.x_interp(pos)
-            y = self.y_interp(pos)
+            x = self.x_interpolated(pos)
+            y = self.y_interpolated(pos)
 
             # TANGENT angle
             dx = self.gradient_with_boundaries(
-                interpolation=self.x_interp,
+                interpolation=self.x_interpolated,
                 boundaries=(self.arc_length[0], self.arc_length[-1]),
                 position=float(pos),
             )
             dy = self.gradient_with_boundaries(
-                interpolation=self.y_interp,
+                interpolation=self.y_interpolated,
                 boundaries=(self.arc_length[0], self.arc_length[-1]),
                 position=float(pos),
             )
@@ -194,7 +190,7 @@ class AnnotateAlongCurve:
                 str(round(pos)),  # ? what to do for the value precision
                 xy=(x, y),
                 xytext=(x + dx_offset, y + dy_offset),
-                **annotate_kwargs,
+                **annotate_kwargs,  #type:ignore
             )
 
     def gradient_with_boundaries(

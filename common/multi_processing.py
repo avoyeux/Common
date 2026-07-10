@@ -4,17 +4,15 @@ Has functions that help me when multiprocessing.
 """
 from __future__ import annotations
 
-# IMPORTs alias
+# IMPORTs third-party
 import numpy as np
 import multiprocessing as mp
-
-# IMPORTs sub
 from multiprocessing import shared_memory
 
 # TYPE ANNOTATIONs
+from typing import Any, Callable, cast
 import queue
 import multiprocessing.managers
-from typing import Any, Callable, cast
 type ManagerQueueProxy = queue.Queue[tuple[int, Any]]  # using a parent
 type ValueProxy[T] = multiprocessing.managers.ValueProxy[T]
 type SharedMemoryAlias = shared_memory.SharedMemory
@@ -37,21 +35,18 @@ class SharedMemoryList(list):
         Args:
             shm (list[mp.shared_memory.SharedMemory]): the list of the shared memory objects.
         """
+        super().__init__(shm)  #type:ignore
 
-        super().__init__(shm)
-    
     def close(self) -> None:
         """
         Calls the .close() method on each shared memory object inside the list.
         """
-
         for memory in self: memory.close()
-    
+
     def unlink(self) -> None:
         """
         Calls the .unlink() method on each shared memory object inside the list.
         """
-
         for memory in self: memory.unlink()
 
 
@@ -136,7 +131,7 @@ class MultiProcessing:
             verbose=verbose,
         )
         return instance.multiprocess_choices()
-        
+
     @staticmethod
     def pool_indexes(data_length: int, nb_processes: int) -> list[tuple[int, int]]:
         """
@@ -164,7 +159,7 @@ class MultiProcessing:
             return result
         else:
             return[(i, i) for i in range(data_length)]
-    
+
     @staticmethod
     def create_shared_memory(
             data: np.ndarray | list[np.ndarray],
@@ -197,7 +192,7 @@ class MultiProcessing:
 
         elif isinstance(data, list):
             try: 
-                data = np.stack(data, axis=0)
+                data = np.stack(data, axis=0)  #type:ignore
                 shm, info = MultiProcessing.create_shared_memory(
                     data=data,
                     multiple=False,
@@ -211,7 +206,7 @@ class MultiProcessing:
                     )
                 shm, info = MultiProcessingUtils.shared_memory_multiple(data)
         else:
-            # Initialisations
+            # Initializations
             shm = shared_memory.SharedMemory(create=True, size=data.nbytes)
             info = {
                 'name': shm.name,
@@ -222,7 +217,7 @@ class MultiProcessing:
             np.copyto(shared_array, data)
             shm.close()
         return shm, info
-    
+
     @staticmethod
     def open_shared_memory(
             data_info: dict[str, Any],
@@ -368,12 +363,12 @@ class MultiProcessingUtils:
         if self.create_shared_memory:
             if not self.shared_memory_input: 
                 shm, self.input_data = MultiProcessing.create_shared_memory(
-                    data=self.input_data,
+                    data=self.input_data,  #type:ignore
                     multiple=self.multiple_shared_memory,
                     verbose=self.verbose,
                 )
         elif self.shared_memory_input: 
-            shm, self.input_data = MultiProcessing.open_shared_memory(self.input_data)
+            shm, self.input_data = MultiProcessing.open_shared_memory(self.input_data) #type:ignore
 
 
         # Choose method
@@ -398,13 +393,13 @@ class MultiProcessingUtils:
         while not output_queue.empty():
             identifier, result = output_queue.get()
             results[identifier] = result
-        
+
         # Manage buffer(s)
         if shm is not None:
             shm.close()
             if self.create_shared_memory and not self.shared_memory_input: shm.unlink()
         return results
-    
+
     def _multiprocess_indexes_all_data(self, output_queue: ManagerQueueProxy) -> None:
         """
         Multiprocessing by using sections of the data to leverage as much as possible operations
@@ -501,7 +496,7 @@ class MultiProcessingUtils:
                     p = mp.Process(
                         target=self._multiprocessing_indexes_sub_with_indexes,
                         kwargs={
-                            'data': self.input_data[index[0]:index[1] + 1],
+                            'data': self.input_data[index[0]:index[1] + 1], #type:ignore
                             'function': self.function,
                             'function_kwargs': self.function_kwargs,
                             'output_queue': output_queue,
@@ -516,7 +511,7 @@ class MultiProcessingUtils:
                     p = mp.Process(
                         target=self._multiprocessing_indexes_sub_without_indexes,
                         kwargs={
-                            'data': self.input_data[index[0]:index[1] + 1],
+                            'data': self.input_data[index[0]:index[1] + 1], #type:ignore
                             'function': self.function,
                             'function_kwargs': self.function_kwargs,
                             'output_queue': output_queue,
@@ -546,7 +541,7 @@ class MultiProcessingUtils:
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
-        
+
         shm = None
         if isinstance(data, dict) and ('name' in data.keys()):
             shm, data = MultiProcessing.open_shared_memory(data)
@@ -580,7 +575,7 @@ class MultiProcessingUtils:
         shm = None
         if isinstance(data, dict) and ('name' in data.keys()):
             shm, data = MultiProcessing.open_shared_memory(data)
-        
+
         result = function(data, index,  **function_kwargs)  #TODO: won't work for list[ndarray]...
         output_queue.put((identifier, result))
 
@@ -605,7 +600,7 @@ class MultiProcessingUtils:
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
-        
+
         result = function(data, **function_kwargs)  #TODO: won't work for list[np.ndarray]...
         output_queue.put((identifier, result))
 
@@ -629,7 +624,7 @@ class MultiProcessingUtils:
             identifier (int): the identifier to know which section of the main data is being
                 multiprocessed.
         """
-        
+
         result = function(data, index, **function_kwargs)  #TODO: won't work for list[ndarray]...
         output_queue.put((identifier, result))
 
@@ -684,7 +679,7 @@ class MultiProcessingUtils:
             index (tuple[int, int]): the indexes for the section of the data that is being
                 multiprocessed.
         """
-        
+
         shm, data_opened = MultiProcessing.open_shared_memory(data)
 
         result = function(data_opened[index[0]:index[1] + 1], index, **function_kwargs)
@@ -801,7 +796,7 @@ class MultiProcessingUtils:
                 p.start()
                 processes[i] = p
         for p in processes: p.join()
-    
+
     @staticmethod
     def _multiprocessing_while_sub_with_indexes_all_data(
             input_function: Callable[..., Any],
@@ -828,8 +823,8 @@ class MultiProcessingUtils:
 
         shm = None
         if isinstance(data, dict) and ('name' in data.keys()):
-            shm, data = MultiProcessing.open_shared_memory(data)
-        
+            shm, data = MultiProcessing.open_shared_memory(data) #type:ignore
+
         # Run
         while True:
             value = shared_value.value
@@ -866,8 +861,8 @@ class MultiProcessingUtils:
 
         shm = None
         if isinstance(data, dict) and ('name' in data.keys()):
-            shm, data = MultiProcessing.open_shared_memory(data)
-        
+            shm, data = MultiProcessing.open_shared_memory(data) #type:ignore
+
         # Run
         while True:
             value = shared_value.value
@@ -906,8 +901,8 @@ class MultiProcessingUtils:
 
         shm = None
         if isinstance(data, dict) and ('name' in data.keys()):
-            shm, data = MultiProcessing.open_shared_memory(data)
-        
+            shm, data = MultiProcessing.open_shared_memory(data) #type:ignore
+
         # Run
         while True:
             print('once', flush=True)
@@ -916,7 +911,7 @@ class MultiProcessingUtils:
             shared_value.value += 1
 
             # Get result
-            result = input_function(data[value], value, **function_kwargs)
+            result = input_function(data[value], value, **function_kwargs) #type:ignore
             # Save result
             output_queue.put((value, result))       
 
@@ -945,8 +940,8 @@ class MultiProcessingUtils:
 
         shm = None
         if isinstance(data, dict) and ('name' in data.keys()):
-            shm, data = MultiProcessing.open_shared_memory(data)
-        
+            shm, data = MultiProcessing.open_shared_memory(data) #type:ignore
+
         # Run
         while True:
             value = shared_value.value
@@ -954,11 +949,11 @@ class MultiProcessingUtils:
             shared_value.value += 1
 
             # Get result
-            result = input_function(data[value], **function_kwargs)
+            result = input_function(data[value], **function_kwargs) #type:ignore
             # Save result
-            output_queue.put((value, result))           
+            output_queue.put((value, result))
 
-        if shm is not None: shm.close()     
+        if shm is not None: shm.close()
 
     @staticmethod
     def shared_memory_multiple(

@@ -3,7 +3,7 @@ Defaults functions for creating and checking the path.
 """
 from __future__ import annotations
 
-# IMPORTs
+# IMPORTs standard
 import os
 import sys
 

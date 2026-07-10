@@ -4,7 +4,7 @@ Contains functions that I use in conjunction with the re module.
 """
 from __future__ import annotations
 
-# IMPORTS
+# IMPORTs standard
 import re
 
 # API public

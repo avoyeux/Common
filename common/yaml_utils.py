@@ -16,7 +16,7 @@ from .main_paths import root_path
 from typing import Any, Protocol
 
 # API public
-__all__ = ['ConfigToObject', 'config']
+__all__ = ['ConfigToObject']
 
 
 
@@ -76,7 +76,7 @@ class ConfigToObject:
         if config_path is not None:
             filepath = config_path
         else:
-            filepath = os.path.join(root_path, "config.yml")
+            filepath = os.path.join(root_path, 'config',  'config.yml')
         config = self._get_config(filepath)
 
         # CREATE directories
@@ -219,5 +219,3 @@ class ConfigToObject:
         # RUN
         _walk(mapping)
 
-
-config = ConfigToObject().config if os.path.exists(os.path.join(root_path, "config.yml")) else None

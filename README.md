@@ -21,10 +21,29 @@ A collection of personal utility functions reused across multiple repositories.
 ## Installation
 
 ```bash
-pip install -e .
+git clone https://github.com/voyeuxalfred/common
+cd common
 ```
 
-Requires Python >= 3.12.
+### (Optional) Create a Python virtual environment
+#### Linux and macOS:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+#### Windows:
+```bash
+python3 -m venv .venv
+.venv\Scripts\activate
+```
+
+### Install
+```bash
+pip install .
+```
+
+(Requires Python >= 3.12).
 
 ## Usage
 

@@ -15,9 +15,7 @@ from .main_paths import *  ## [...] getting the project root path
 from .yaml_utils import *  ## [...] yaml file handling
 from .formatting import *  ## [...] formatting strings
 from .png_to_video import *  ## [...] creating videos from png files
-from .multi_processing import *  ## [...] the multiprocessing library
 from .array_manipulation import *  ## [...] manipulation of ndarray
-from .process_coordinator import *  ## [...] the process coordinator library
 
 
 # todo need to think about how to clean up error messages so that the messages from my decorator

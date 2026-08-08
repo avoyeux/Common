@@ -11,7 +11,6 @@ from time import time, ctime
 
 # IMPORTs third-party
 import numpy as np
-from typeguard import typechecked
 
 # IMPORTs personal
 from .formatting import StringFormatter
@@ -27,7 +26,6 @@ __all__ = ['ClassDecorator', 'Decorators']
 
 
 
-@typechecked
 def ClassDecorator(
         decorator: D,
         functiontype: T | Literal['regular', 'instance', 'all'] = 'all',
@@ -263,7 +261,7 @@ class DecoratorsUtils:
             size: bool,
             flush: bool,
         ) -> F:
-        
+
         @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             #TODO: copy the docstring for the other wrapper.

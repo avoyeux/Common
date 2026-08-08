@@ -1,25 +1,17 @@
-# BLACKLIST all
+# BLACKLIST everything
 *
 
-# WHITELIST dirs
-!/common/
-!/common/**/*
-!/tests/
-!/rustmod/
-!/rustmod/src/
+# WHITELIST source files
+!src/
+!src/**/
+!src/**/*.py
+!src/**/*.sh
 
-# BLACKLIST 
-**/.*/
+# BLACKLIST Python cache
 **/__pycache__/
 
-# WHITELIST types
-!**/*.py
-!**/*.pyi
-!**/*.sh
-!**/*.rs
-!**/*.toml
-
-# WHITELIST files
-!README.md
+# WHITELIST standard files
 !.gitignore
-!.requirements.txt
+!pyproject.toml
+!LICENSE
+!README.md

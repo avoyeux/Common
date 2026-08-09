@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "common"
-version = "2.0.1"
+version = "2.1.0"
 authors = [
   { name = "Voyeux Alfred", email = "voyeuxalfred@gmail.com" }
 ]
-description = "Some functions that I use a lot."
+description = "A collection of personal utility functions reused across multiple repositories."
 readme = "README.md"
 requires-python = ">=3.12.3"
 license = "MIT"

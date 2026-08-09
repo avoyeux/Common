@@ -10,6 +10,9 @@
 # BLACKLIST Python cache
 **/__pycache__/
 
+# BLACKLIST hidden directories
+**/.*/
+
 # WHITELIST standard files
 !.gitignore
 !pyproject.toml

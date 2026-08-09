@@ -2,6 +2,8 @@
 
 A collection of personal utility functions reused across multiple repositories.
 
+**Requires Python >= 3.12**.
+
 ## Features
 
 - Regular expression helpers (`re`)
@@ -21,7 +23,7 @@ A collection of personal utility functions reused across multiple repositories.
 ## Installation
 
 ```bash
-git clone https://github.com/voyeuxalfred/common
+git clone https://github.com/voyeuxalfred/common.git
 cd common
 ```
 
@@ -42,8 +44,6 @@ python3 -m venv .venv
 ```bash
 pip install .
 ```
-
-(Requires Python >= 3.12).
 
 ## Usage
 
